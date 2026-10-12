@@ -149,160 +149,42 @@ $ make memory  # Wormhole meta cache on vs off; versus
 $ make memory2 # meta cache on.
 # combining, to summarize:
 ~~~
-| Container         | Heap bytes (MB)  | B/key | extra GC pointer tracing load (bytes) |
-| ----------------- | ---------------: | ----: | ------------------------------------: |
-| Wormhole (meta on)|     6.16         | 64.63 |                               3124336 | 
-| glycerine/rbtree  |     6.10         | 64.00 |                               4000056 |
-| insdict.Dict      |     5.30         | 55.62 |                                   112 |
-| Turtle            |     4.78         | 50.15 |                                  1720 |
-| Wormhole(meta off)|     4.45         | 46.69 |                               1452656 | 
-| bufftree.BPTree   |     2.44         | 25.60 |                                 40256 |
-| tidwall/btree.Map |     2.40         | 25.13 |                                141872 |
-| builtin Go map    |     2.26         | 23.65 |                                  4248 |
+| Container         | Heap bytes | MiB  | B/key | extra GC pointer tracing load (bytes) |
+| ----------------- | ---------: | ---: | ----: | ------------------------------------: |
+| glycerine/rbtree  |    6400080 | 6.10 | 64.00 |                               4000056 |
+|>Wormhole (meta on)|    5807440 | 5.54 | 58.07 |                               3124336 |
+| insdict.Dict      |    5562488 | 5.30 | 55.62 |                                   112 |
+| Turtle            |    5015336 | 4.78 | 50.15 |                                  1720 |
+|>Wormhole(meta off)|    4012880 | 3.83 | 40.13 |                               1452656 |
+| bufftree.BPTree   |    2560392 | 2.44 | 25.60 |                                 40264 |
+| tidwall/btree.Map |    2513408 | 2.40 | 25.13 |                                141872 |
+| builtin Go map    |    2364592 | 2.26 | 23.65 |                                  4248 |
 
 > conclude: notice how Wormhole moved in the ranking.
 >
-> 6.16/4.45 => 1.38x less heap w/ meta cache off. 
+> 5.81/4.0 => 1.45x less heap w/ meta cache off. 
 >
-> 3.1M/1.4M => 2.2x less GC trace load.
+> 3.1M/1.45M => 2.1x less GC trace load.
 >
 
 With the metadata caches in use:
 
-| Operation (showing ns/key) | Wormhole | Turtle | BP-Tree| tidwall/btree | red-blk tree | insdict | builtin map |
-| -------------------------- | -------: | -----: | -----: | ------------: | -----------: | ------: | ----------: |
-| (hit)   Get                |     56.6 |  116.2 |   97.6 |         112.7 |        199.1 |    21.5 |        16.9 |
-| (fresh) Put                |    142.1 |  127.1 |  113.8 |         158.4 |        358.5 |    53.6 |        77.2 |
-| Ordered scan               |     2.49 |   2.79 |   3.06 |          3.89 |        15.23 |    5.43 |         N/A |
-| Unordered scan (map does)  |     2.47 |   2.74 |   3.92 |          2.34 |        15.34 |    0.67 |        9.31 |
+| Operation (showing ns/key)    | Wormhole | Turtle | BP-Tree | tidwall/btree | red-blk tree | insdict | builtin map |
+| ----------------------------- | -------: | -----: | ------: | ------------: | -----------: | ------: | ----------: |
+| Tree `Get`, hit               |     48.8 |  114.2 |    91.6 |         108.8 |        194.3 |    20.2 |        15.6 |
+| Tree `Get`, miss              |     37.8 |  113.6 |    89.8 |         108.9 |        212.2 |    17.7 |        14.4 |
+| Tree `Put`, fresh key         |    116.7 |  118.9 |   106.8 |         151.9 |        356.2 |    58.4 |        74.9 |
+| Ordered scan, maximum 10,000  |     2.44 |   2.75 |    2.68 |          4.53 |        15.12 |    5.42 |         N/A |
+| Ordered scan, maximum 100,000 |     2.42 |   2.72 |    2.66 |          4.52 |        15.26 |    5.33 |         N/A |
+| Full traversal                |     2.40 |   2.68 |    3.82 |          2.33 |        14.96 |    0.61 |        9.17 |
 
-versus MetaCache off, Wormhole Get (hit) can be 58-73 ns/key (3-30% slower)
+versus MetaCache off, Wormhole Get (hit) can be a litte slower.
 
-| Operation (showing ns/key) | Wormhole | Turtle | BP-Tree| tidwall/btree | red-blk tree | insdict | builtin map |
-| -------------------------- | -------: | -----: | -----: | ------------: | -----------: | ------: | ----------: |
-| (hit)   Get                |     58.9 |  118.6 |  101.2 |         111.5 |        199.7 |    21.8 |        16.9 |
-| (fresh) Put                |    143.6 |  130.0 |  112.9 |         162.8 |        399.0 |    55.8 |        76.7 |
-| Ordered scan               |     2.51 |   2.80 |   3.04 |          3.92 |        15.86 |    6.29 |         N/A |
-| Unordered scan (map does)  |     2.50 |   2.76 |   3.94 |          2.34 |        15.25 |    0.66 |        9.18 |
-
-## Tail latencies
-
-as of 1d2aeb3f7, Oct 10 21:44:50 2026 -0500
-
-~~~
-  Pinned benchmarks now show:
-
-  • 64 keys: Go 39.27M writes/s, C 5.43M.
-  • One key: Go 43.82M writes/s, C 5.35M.
-  • Go leads throughput and p50/p95/p99/p99.9 in all seven measured C comparisons.
-
-  Tidwall comparisons are refreshed too. Go leads 
-  throughput on all comparisions. Tidwall still wins serial fresh/
-  ascending p95 - p99, but the max latency p100 is 
-  tighter on wormhole while displaying better mean and median ns/write.
-  
-BenchmarkWriteLatency/Ascending/Wormhole/Workers1-48          	 8788957	       131.6 ns/op	    233_274 p100-ns	       110.0 p50-ns	       200.0 p95-ns	      1610 p99-ns	    976551 samples	      51 B/op	       1 allocs/op
-
-BenchmarkWriteLatency/Ascending/Tidwall/Workers1-48           	 8436313	       135.5 ns/op	    305_292 p100-ns	       130.0 p50-ns	       140.0 p95-ns	       700.0 p99-ns	    937369 samples	      68 B/op	       0 allocs/op
-
-~~~
-
-| Container / traversal                                     | ns/key | L1 hit estimate | L1 misses/key | Instructions/key | Ins/cycle |
-| ---------------------------                               | -----: | --------------: | ------------: | ---------------: | --------: |
-| tidwall / full ordered scan                               |   2.39 |          97.37% |         0.420 |            23.95 |      2.38 |
-| insdict / sorted inserts + Ascend (cost of 1 indirection) |   3.89 |          97.90% |         0.633 |            49.05 |      3.01 |
-| insdict / unordered All                                   |   0.74 |          87.50% |         0.501 |            14.00 |      4.49 |
-
-## arg preformance regression vs C
-
-~~~
-$ concbench words.txt 1000000 20
-worker CPUs=[0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47] (w\
-orker i uses CPUs[i % 48], verified after pinning)
-corpus keys=1000000 sha256=3f962a45de138d589a31725b5831cfba78d893c564255b92f1ea79320847585b
-Go go1.26.4-pont-onethread GOMAXPROCS=20; prepared keys, automatic epoch parking
-workload prefetch=true
-load worker 0 250000
-load worker 250000 500000
-load worker 500000 750000
-load worker 750000 1000000
-load x4 4.56 mops count=1000000 dt_ns=219346580 clocked=false workload=fresh
-probe with 20 threads. each round takes 3s
-probe x20 44.90 mops count=134880000 misses=0
-...
-
-vs C at 57 mops
-----------
-
-• Bisect and alternating parent/child runs confirmed three drops:
-
-   Commit     Change                                       Before → after, Mops/s
-  ━━━━━━━━━  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  ━━━━━━━━━━━━━━━━━━━━━━━━
-   60e3550    Initial generic conversion                            12.21 → 11.70
-  ─────────  ───────────────────────────────────────────  ────────────────────────
-   6760239    Numeric leaf slots; shared layout changes             11.55 → 11.23
-  ─────────  ───────────────────────────────────────────  ────────────────────────
-   08b5d30    String hash-slot array moved outside leaf             11.12 → 10.35
-
-  Each comparison used pinned CPUs 0–3, fixed queries, and nine measured rounds per revision.
-
-  The largest confirmed individual drop is 08b5d30, about 7%. The regression accumulated across multiple commits.
-
-  Evidence committed as d415a39. No library changes made.
-
-
-• The three commits changed these specific things:
-
-  1. 60e3550: converted the string-only implementation to generics.
-     Prepared string keys grew from 24 to 48 bytes: they now 
-	 hold both the native key and its routing string, plus a 
-	 readiness flag. Lookups pass both representations and check
-     readiness. Leaf matching also changed from direct string equality:
-
-     stored.key == key
-
-     to generic ordering:
-
-     orderedCompare(stored.key, key) == 0
-
-     That supports ordered types and our NaN-last behavior, but 
-	 changes the string lookup code too. Confirmed throughput: 
-	 12.21 → 11.70 Mops/s, about 4.2% lower.
-
-  2. 6760239: introduced stable storage for numeric keys.
-     Numeric leaves gained a block of 128 records and bucket chains, 
-	 avoiding individual record allocations and shifting records during inserts.
-
-     However, strings shared the same leaf struct, so string 
-	 leaves also acquired unused numeric bookkeeping: 256 bucket 
-	 bytes, 128 chain bytes, a record-block pointer, and a
-     dense flag. Every string leaf lookup also acquired a
-	 branch checking that flag.
-
-     Confirmed throughput: 11.55 → 11.23 Mops/s, about 2.8% lower.
-
-  3. 08b5d30: separated numeric storage to reduce GC scanning—and 
-     moved string storage outside the leaf.
-     This is the largest confirmed individual drop. The string 
-	 record-pointer array changed from:
-
-     hs [128]*record[K, V]  // embedded inside the leaf
-
-     to:
-
-     hs *[128]*record[K, V] // separately allocated array
-
-     Previously, accessing a record loaded its pointer directly 
-	 from the leaf. Afterward, it first had to load the pointer 
-	 to the separate array, then load the record pointer.
-     That adds a dependent pointer load and changes cache locality. 
-	 The prefetch path also needs that array pointer.
-
-     Confirmed throughput: 11.12 → 10.35 Mops/s, about 6.9% lower.
-
-The bisect confirms the cost of each whole commit. It does 
-not yet isolate the cost of each field, branch, or comparison
-within those commits. These storage and lookup choices
-can be revised while keeping the generic API and the
-numeric insertion improvements.
-~~~
+| Operation (showing ns/key)    | Wormhole | Turtle | BP-Tree | tidwall/btree | red-blk tree | insdict | builtin map |
+| ----------------------------- | -------: | -----: | ------: | ------------: | -----------: | ------: | ----------: |
+| Tree `Get`, hit               |     49.7 |  113.1 |    92.3 |         109.0 |        191.6 |    20.2 |        15.6 |
+| Tree `Get`, miss              |     38.3 |  113.9 |    90.4 |         109.2 |        214.6 |    17.7 |        14.4 |
+| Tree `Put`, fresh key         |    119.2 |  119.4 |   107.0 |         150.9 |        402.6 |    55.2 |        74.5 |
+| Ordered scan, maximum 10,000  |     2.44 |   2.73 |    2.64 |          4.55 |        15.14 |    5.44 |         N/A |
+| Ordered scan, maximum 100,000 |     2.45 |   2.69 |    2.66 |          4.52 |        15.28 |    5.33 |         N/A |
+| Full traversal                |     2.43 |   2.71 |    3.82 |          2.34 |        14.88 |    0.61 |        9.19 |
