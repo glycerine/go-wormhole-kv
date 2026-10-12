@@ -149,16 +149,16 @@ $ make memory  # Wormhole meta cache on vs off; versus
 $ make memory2 # meta cache on.
 # combining, to summarize:
 ~~~
-| Container         | Heap bytes | MiB  | B/key | extra GC pointer tracing load (bytes) |
-| ----------------- | ---------: | ---: | ----: | ------------------------------------: |
-| glycerine/rbtree  |    6400080 | 6.10 | 64.00 |                               4000056 |
-|>Wormhole (meta on)|    5807440 | 5.54 | 58.07 |                               3124336 |
-| insdict.Dict      |    5562488 | 5.30 | 55.62 |                                   112 |
-| Turtle            |    5015336 | 4.78 | 50.15 |                                  1720 |
-|>Wormhole(meta off)|    4012880 | 3.83 | 40.13 |                               1452656 |
-| bufftree.BPTree   |    2560392 | 2.44 | 25.60 |                                 40264 |
-| tidwall/btree.Map |    2513408 | 2.40 | 25.13 |                                141872 |
-| builtin Go map    |    2364592 | 2.26 | 23.65 |                                  4248 |
+| Container         | Heap MB| B/key | extra GC pointer tracing load (bytes) |
+| ----------------- | ------: | ----: | ------------------------------------: |
+| glycerine/rbtree  |    6.10 | 64.00 |                               4000056 |
+|>Wormhole (meta on)|    5.54 | 58.07 |                               3124336 |
+| insdict.Dict      |    5.30 | 55.62 |                                   112 |
+| Turtle            |    4.78 | 50.15 |                                  1720 |
+|>Wormhole(meta off)|    3.83 | 40.13 |                               1452656 |
+| bufftree.BPTree   |    2.44 | 25.60 |                                 40264 |
+| tidwall/btree.Map |    2.40 | 25.13 |                                141872 |
+| builtin Go map    |    2.26 | 23.65 |                                  4248 |
 
 > conclude: notice how Wormhole moved in the ranking.
 >
