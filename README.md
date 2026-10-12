@@ -188,3 +188,11 @@ versus MetaCache off, Wormhole Get (hit) can be a litte slower.
 | Ordered scan, maximum 10,000  |     2.44 |   2.73 |    2.64 |          4.55 |        15.14 |    5.44 |         N/A |
 | Ordered scan, maximum 100,000 |     2.45 |   2.69 |    2.66 |          4.52 |        15.28 |    5.33 |         N/A |
 | Full traversal                |     2.43 |   2.71 |    3.82 |          2.34 |        14.88 |    0.61 |        9.19 |
+
+---------------
+Copyright (C) 2026 Jason E. Aten, Ph.D.
+
+License: MIT (see LICENSE file)
+
+Derived under MIT license from the upstream C code https://github.com/wuxb45/wormhole , which is
+Copyright (c) 2016-2026 by Xingbo Wu
