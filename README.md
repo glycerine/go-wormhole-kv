@@ -18,7 +18,7 @@ existing keys and retains the chosen prefix without copying its bytes.
 It has no C dependency in ordinary builds.
 
 ```go
-import "github.com/glycerine/wormhole/go"
+import "github.com/glycerine/go-wormhole-kv"
 
 m := wormhole.New[string, string]()
 r := m.Ref() // one handle per concurrent caller
