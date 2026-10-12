@@ -1,0 +1,12 @@
+github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
+github.com/cespare/xxhash/v2 v2.3.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
+github.com/glycerine/bufftree v0.0.3 h1:Vr6XAVSXZzqOHgQKSOLr+GEG5svDFsRa8KGJEBXuqNs=
+github.com/glycerine/bufftree v0.0.3/go.mod h1:2WV+Nj7/kVbloWHI7/8QHE5l5pVsuFpvgvcHncPG9+k=
+github.com/glycerine/insdict v0.14.6 h1:WK6fjhNICdcYBUtu25I/shHn0zPMl2kGjK9N/6MR/cs=
+github.com/glycerine/insdict v0.14.6/go.mod h1:TqTjrFgLW84SYT7b865Zs4hGPwMExvVekNC6nUGNLI0=
+github.com/glycerine/rbtree v0.2.2 h1:Xp8mUtk2+7Tzcp+as08yFS1/MBm/MeZqE5cFvEUT27k=
+github.com/glycerine/rbtree v0.2.2/go.mod h1:skpUtSrm1HHyLo+HayukOvAmXtE/F6tsVW0uCpaBGWE=
+github.com/glycerine/turtle/go v0.0.5 h1:VyYOomggYhd0GFmzC+82GLTIjytAsKyPvLC1LFh4R2I=
+github.com/glycerine/turtle/go v0.0.5/go.mod h1:F+w+wdkWO50OMZ6yaoMo9x4gIpot9/MA36UMgWMRISw=
+github.com/tidwall/btree v1.8.1 h1:27ehoXvm5AG/g+1VxLS1SD3vRhp/H7LuEfwNvddEdmA=
+github.com/tidwall/btree v1.8.1/go.mod h1:jBbTdUWhSZClZWoDg54VnvV7/54modSOzDN7VXftj1A=
