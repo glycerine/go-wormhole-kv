@@ -189,6 +189,15 @@ versus MetaCache off, Wormhole Get (hit) can be a litte slower.
 | Ordered scan, maximum 100,000 |     2.45 |   2.69 |    2.66 |          4.52 |        15.28 |    5.33 |         N/A |
 | Full traversal                |     2.43 |   2.71 |    3.82 |          2.34 |        14.88 |    0.61 |        9.19 |
 
+| key          | repo                                                    |
+| ------------:| -------------------------------------------------------:|
+|Wormhole      | https://github.com/glycerine/go-wormhole-kv (this repo) |
+|Turtle        | unpublished port of https://github.com/mathworks/turtle_kv |
+|BP-Tree       | https://github.com/glycerine/bufftree |
+|tidwall/btree | https://github.com/tidwall/btree      |
+|red-blk       | https://github.com/glycerine/rbtree   |
+|insdict       | https://github.com/glycerine/insdict  |
+
 ---------------
 Copyright (C) 2026 Jason E. Aten, Ph.D.
 
