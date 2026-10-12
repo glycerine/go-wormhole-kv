@@ -1,6 +1,6 @@
 package main
 
-import wormhole "github.com/glycerine/wormhole/go"
+import wormhole "github.com/glycerine/go-wormhole-kv"
 
 // prefetchProbe mirrors concbench.c's upcoming-sample prefetches. Go query
 // bytes live separately from their string headers, so prefetch both the next

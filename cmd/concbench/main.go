@@ -14,9 +14,9 @@ import (
 	"sync"
 	"time"
 
-	wormhole "github.com/glycerine/wormhole/go"
-	"github.com/glycerine/wormhole/go/internal/benchworkload"
-	"github.com/glycerine/wormhole/go/internal/cpuaffinity"
+	wormhole "github.com/glycerine/go-wormhole-kv"
+	"github.com/glycerine/go-wormhole-kv/internal/benchworkload"
+	"github.com/glycerine/go-wormhole-kv/internal/cpuaffinity"
 )
 
 func main() {
