@@ -1,5 +1,3 @@
-//go:build linux
-
 package bench
 
 import (
@@ -40,28 +38,32 @@ func TestMemoryFootprint(t *testing.T) {
 		t.Skip("memory diagnostic")
 	}
 	n := benchLoadSize()
-	cpu, err := comparisonCPU()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if layout := os.Getenv(memoryWorkerEnv); layout != "" {
-		runtime.GOMAXPROCS(1)
-		restore, err := cpuaffinity.Pin(cpu)
+	var err error
+	var cpu int
+	if runtime.GOOS == "linux" {
+		cpu, err = comparisonCPU()
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer func() {
-			if err := restore(); err != nil {
-				t.Error(err)
+		if layout := os.Getenv(memoryWorkerEnv); layout != "" {
+			runtime.GOMAXPROCS(1)
+			restore, err := cpuaffinity.Pin(cpu)
+			if err != nil {
+				t.Fatal(err)
 			}
-		}()
-		result := measureContainerHeap(t, layout, n)
-		data, err := json.Marshal(result)
-		if err != nil {
-			t.Fatal(err)
+			defer func() {
+				if err := restore(); err != nil {
+					t.Error(err)
+				}
+			}()
+			result := measureContainerHeap(t, layout, n)
+			data, err := json.Marshal(result)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fmt.Printf("%s%s\n", memoryResultPrefix, data)
+			return
 		}
-		fmt.Printf("%s%s\n", memoryResultPrefix, data)
-		return
 	}
 	executable, err := os.Executable()
 	if err != nil {

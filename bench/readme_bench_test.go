@@ -58,11 +58,13 @@ func TestReadmeBenchmarkTable(t *testing.T) {
 		t.Fatal(err)
 	}
 	n := benchLoadSize()
-	cpu, err := comparisonCPU()
-	if err != nil {
-		t.Fatal(err)
+	if runtime.GOOS == "linux" {
+		cpu, err := comparisonCPU()
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("benchmark CPU (verified by each case): %d; GOMAXPROCS=%d", cpu, runtime.GOMAXPROCS(0))
 	}
-	t.Logf("benchmark CPU (verified by each case): %d; GOMAXPROCS=%d", cpu, runtime.GOMAXPROCS(0))
 	cases := make(map[string]func(*testing.B))
 	for _, bc := range tablePointCases(n, *comparisonKeyType) {
 		cases["Points/"+bc.name] = bc.run
