@@ -130,9 +130,7 @@ Both use four load workers, native six-word corpus generation and Lehmer RNG,
 10,000-probe batches, and three three-second rounds. The dictionary is an
 external input, not required for tests. The Go driver prints a corpus hash,
 CPU mapping, counts, and misses; `-cpuprofile` profiles probes. Ordinary GC stays
-enabled. Historical progress and implementation evidence are in
-[PORTING.md](PORTING.md). The requirement-by-requirement evidence is in
-[VALIDATION.md](VALIDATION.md); current write measurements are in `bench/results/`.
+enabled. 
 
 # benchmarks
 
