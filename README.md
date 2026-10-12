@@ -49,16 +49,16 @@ without copying and must remain immutable. Numeric routing bytes use scratch
 storage owned by each Ref; only metadata separators and prepared keys retain
 encoded copies. Existing-key writes do not allocate replacement records.
 
-| Operation | Go API |
-| --- | --- |
-| Point reads/writes | `Ref.Get`, `Probe`, `Put`, `Delete` |
-| Atomic callback under write lock | `Ref.Merge`, `Update` |
-| Callback under read lock | `Ref.Inspect` |
-| Range deletion | `Ref.DeleteRange(start, end)` for [start,end), `DeleteFrom(start)` without an upper bound |
-| Ordered iteration | `Ref.Iterator`, then `Seek`, `Valid`, `Peek`, `Next`, `Skip`, `Inspect`, `Park`, `Close` |
-| Ordered callback scan | `Ref.Scan(start, limit, visit)` returns the number visited; a false callback stops the scan |
+| Operation                        | Go API                                 |
+| -------------------------------- | -------------------------------------- |
+| Point reads/writes               | `Ref.Get`, `Probe`, `Put`, `Delete`    |
+| Atomic callback under write lock | `Ref.Merge`, `Update`                  |
+| Callback under read lock         | `Ref.Inspect`                          |
+| Range deletion                   | `Ref.DeleteRange(start, end)` for [start,end), `DeleteFrom(start)` without an upper bound |
+| Ordered iteration                | `Ref.Iterator`, then `Seek`, `Valid`, `Peek`, `Next`, `Skip`, `Inspect`, `Park`, `Close` |
+| Ordered callback scan            | `Ref.Scan(start, limit, visit)` returns the number visited; a false callback stops the scan |
 | Repeated prepared-key operations | `PrepareKey`, `Ref.PutKey`, `ProbeKey` |
-| Number of keys | `Map.Len` |
+| Number of keys                   | `Map.Len`                              |
 
 Size-changing writes update per-Ref insertion/deletion tallies rather than a
 shared global counter. `Len` takes a consistent snapshot across open references;
@@ -172,9 +172,8 @@ With the metadata caches in use:
 | Tree `Get`, hit               |     48.8 |  114.2 |    91.6 |         108.8 |        194.3 |    20.2 |        15.6 |
 | Tree `Get`, miss              |     37.8 |  113.6 |    89.8 |         108.9 |        212.2 |    17.7 |        14.4 |
 | Tree `Put`, fresh key         |    116.7 |  118.9 |   106.8 |         151.9 |        356.2 |    58.4 |        74.9 |
-| Ordered scan, maximum 10,000  |     2.44 |   2.75 |    2.68 |          4.53 |        15.12 |    5.42 |         N/A |
 | Ordered scan, maximum 100,000 |     2.42 |   2.72 |    2.66 |          4.52 |        15.26 |    5.33 |         N/A |
-| Full traversal                |     2.40 |   2.68 |    3.82 |          2.33 |        14.96 |    0.61 |        9.17 |
+| Full traversal (map too)      |     2.40 |   2.68 |    3.82 |          2.33 |        14.96 |    0.61 |        9.17 |
 
 versus MetaCache off, Wormhole Get (hit) can be a litte slower.
 
@@ -183,9 +182,8 @@ versus MetaCache off, Wormhole Get (hit) can be a litte slower.
 | Tree `Get`, hit               |     49.7 |  113.1 |    92.3 |         109.0 |        191.6 |    20.2 |        15.6 |
 | Tree `Get`, miss              |     38.3 |  113.9 |    90.4 |         109.2 |        214.6 |    17.7 |        14.4 |
 | Tree `Put`, fresh key         |    119.2 |  119.4 |   107.0 |         150.9 |        402.6 |    55.2 |        74.5 |
-| Ordered scan, maximum 10,000  |     2.44 |   2.73 |    2.64 |          4.55 |        15.14 |    5.44 |         N/A |
 | Ordered scan, maximum 100,000 |     2.45 |   2.69 |    2.66 |          4.52 |        15.28 |    5.33 |         N/A |
-| Full traversal                |     2.43 |   2.71 |    3.82 |          2.34 |        14.88 |    0.61 |        9.19 |
+| Full traversal (map too)      |     2.43 |   2.71 |    3.82 |          2.34 |        14.88 |    0.61 |        9.19 |
 
 | key          | repo                                                    |
 | ------------:| -------------------------------------------------------:|
