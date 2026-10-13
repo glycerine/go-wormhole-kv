@@ -58,22 +58,28 @@ func (l *leaf[K, V]) splitDenseRetainLeft(right *leaf[K, V], is, cut int, key K,
 	// Preserve stable slots on the left. Only records crossing the split are
 	// copied out and cleared; the caller already selected the separator.
 	oldSlots := l.ss
+	rightSlot := 0
 	for i := cut; i <= leafCapacity; i++ {
 		if i == is {
-			right.insertDenseEntry(key, value, tag)
+			right.records[rightSlot] = record[K, V]{key: key, value: value}
+			right.tags[rightSlot] = tag
 		} else {
 			rank := i
 			if i > is {
 				rank--
 			}
 			slot := oldSlots[rank]
-			v := l.records[slot]
-			right.insertDenseEntry(v.key, v.value, l.tags[slot])
+			right.records[rightSlot] = l.records[slot]
+			right.tags[rightSlot] = l.tags[slot]
 			l.records[slot] = record[K, V]{}
 			l.tags[slot] = 0
 			l.occupied[slot>>6] &^= uint64(1) << (slot & 63)
 		}
+		right.ss[rightSlot] = uint8(rightSlot)
+		right.occupied[rightSlot>>6] |= uint64(1) << (rightSlot & 63)
+		rightSlot++
 	}
+	right.n = rightSlot
 	var inserted uint8
 	if is < cut {
 		l.n = cut - 1
@@ -99,6 +105,11 @@ func (l *leaf[K, V]) splitDenseRetainLeft(right *leaf[K, V], is, cut int, key K,
 			bucket := byte(l.tags[slot])
 			l.chain[slot] = l.buckets[bucket]
 			l.buckets[bucket] = slot + 1
+		}
+		for _, slot := range right.ss[:right.n] {
+			bucket := byte(right.tags[slot])
+			right.chain[slot] = right.buckets[bucket]
+			right.buckets[bucket] = slot + 1
 		}
 	}
 	l.sorted, right.sorted = l.n, right.n

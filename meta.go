@@ -458,6 +458,9 @@ func (t *metaTable[K, V]) longestPrefix(key string) (*metadata[K, V], int, uint3
 }
 
 func (t *metaTable[K, V]) jump(key string) *leaf[K, V] {
+	if isStringKey[K]() && t.maxPrefix <= 2 && len(key) != 0 {
+		return t.jumpFixed(key)
+	}
 	m, n, h := t.longestPrefix(key)
 	if n == len(key) || int(m.children.min) > int(key[n]) {
 		return m.lpath
@@ -469,9 +472,9 @@ func (t *metaTable[K, V]) jump(key string) *leaf[K, V] {
 	return t.child(key[:n], h, sibling).right
 }
 
-// jumpFixed routes fixed-width numeric encodings by following confirmed
-// child bits. With short numeric separators this avoids speculative cuckoo
-// probes for prefixes the bitmap already proves absent.
+// jumpFixed follows confirmed child bits for numeric encodings and shallow
+// string tries. Cached prefix nodes avoid speculative cuckoo probes for
+// prefixes the bitmap already proves absent.
 func (t *metaTable[K, V]) jumpFixed(key string) *leaf[K, V] {
 	if t.routes != nil {
 		if l := t.routes.lookup(key); l != nil {
@@ -510,7 +513,7 @@ func (t *metaTable[K, V]) jumpFixed(key string) *leaf[K, V] {
 			return m.lpath
 		}
 	}
-	h := crcExtend(crcSeed, key[:n])
+	h := m.hash // cached nodes already confirm exactly key[:n]
 	for n < len(key) && m.children.has(key[n]) {
 		token := key[n]
 		m = t.child(key[:n], h, token)

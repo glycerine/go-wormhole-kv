@@ -313,6 +313,37 @@ func checkJump(t testing.TB, table *metaTable[string, string], leaves []*leaf[st
 	}
 }
 
+func TestMetadataPrefixBoundariesAndFalseTags(t *testing.T) {
+	for length := 7; length < 15; length++ {
+		leaves := []*leaf[string, string]{{}}
+		table := newMetaTable[string, string](64)
+		table.put(newMetadata("", crcSeed, leaves[0]))
+		for _, prefix := range []string{"abcd", "abce", "uvwz"} {
+			anchor := prefix + strings.Repeat("x", length-4)
+			leaves = insertTestAnchor(table, leaves, anchor)
+			for i := 0; i <= len(anchor); i++ {
+				checkJump(t, table, leaves, anchor[:i])
+			}
+		}
+		for _, prefix := range []string{"abcd", "abce", "abzz", "uvwz", "zzzz"} {
+			key := prefix + strings.Repeat("x", length+2)
+			for i := range key {
+				query := key[:i] + "y" + key[i+1:]
+				checkJump(t, table, leaves, query)
+			}
+			checkJump(t, table, leaves, key)
+		}
+		// Fake matching fingerprints must not turn an absent prefix into an
+		// exact hit or defeat the bitmap's confirmed lower bound.
+		for _, prefix := range []string{"abzz", "abcdxy", "abcdxxy"} {
+			table.put(&metadata[string, string]{key: "fake-" + prefix, hash: crcExtend(crcSeed, prefix)})
+		}
+		for _, key := range []string{"abzzxxx", "abcdxyxxx", "abcdxxyxxx", "abcdyyy"} {
+			checkJump(t, table, leaves, key)
+		}
+	}
+}
+
 func TestMetaAnchors(t *testing.T) {
 	t.Run("given binary and prefix anchors when inserting and removing then retain exact metadata and predecessor lookup", func(t *testing.T) {
 		anchors := []string{"\x00", "\x00\x00", "\x00\x00\x00", "\x00\xff", "a", "a\x00", "aa", "ab", "b", "bb", "\xff", "\xff\xff"}

@@ -66,8 +66,9 @@ func (m *leafRWMutex) Unlock() {
 
 func (m *leafRWMutex) RLock() {
 	leafRaceDisable()
-	v := atomic.LoadUint32(&m.state)
-	if v >= leafWriterBit-1 || !atomic.CompareAndSwapUint32(&m.state, v, v+1) {
+	// Most point reads acquire an otherwise idle leaf. Avoid a shared load
+	// before requesting cache ownership; concurrent readers use the slow path.
+	if !atomic.CompareAndSwapUint32(&m.state, 0, 1) {
 		m.rlockSlow()
 	}
 	leafRaceEnable()

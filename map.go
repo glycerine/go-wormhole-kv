@@ -159,7 +159,7 @@ func (r *Ref[K, V]) lockLeaf(key string, tag uint16, write bool) *leaf[K, V] {
 	for {
 		s := r.protectSnapshot(r.m.current.Load())
 		var l *leaf[K, V]
-		if r.m.keyKind == reflect.String {
+		if isStringKey[K]() {
 			l = s.table.jump(key)
 		} else {
 			l = s.table.jumpFixed(key)
@@ -185,40 +185,40 @@ func (r *Ref[K, V]) lockLeaf(key string, tag uint16, write bool) *leaf[K, V] {
 // Get returns the value associated with key and whether the key exists.
 func (r *Ref[K, V]) Get(key K) (V, bool) {
 	r.checkAvailable()
-	route := routingKeyKind(key, &r.routing, r.m.keyKind)
-	tag := keyTag(route)
-	l := r.lockLeaf(route, tag, false)
-	i := l.match(key, tag)
-	if i == leafCapacity {
-		l.mu.RUnlock()
-		var zero V
-		return zero, false
+	if isStringKey[K]() {
+		return r.getString(key)
 	}
-	value := l.recordAtSlot(i).value
-	l.mu.RUnlock()
-	return value, true
+	return r.getNumeric(key)
 }
 
 // Probe reports whether key exists without returning its value.
 func (r *Ref[K, V]) Probe(key K) bool {
 	r.checkAvailable()
-	route := routingKeyKind(key, &r.routing, r.m.keyKind)
-	return r.probe(key, route, keyTag(route))
+	if isStringKey[K]() {
+		route := stringKey(key)
+		return r.probeString(key, route, keyTag(route))
+	}
+	route := numericRoutingKey(key, &r.routing, r.m.keyKind)
+	return r.probeNumeric(key, route, keyTag(route))
 }
 
 func (r *Ref[K, V]) probe(key K, route string, tag uint16) bool {
-	l := r.lockLeaf(route, tag, false)
-	found := l.match(key, tag) != leafCapacity
-	l.mu.RUnlock()
-	return found
+	if isStringKey[K]() {
+		return r.probeString(key, route, tag)
+	}
+	return r.probeNumeric(key, route, tag)
 }
 
 // Put inserts or replaces a value. A failed insertion leaves all keys and
 // values unchanged. Values are stored by assignment.
 func (r *Ref[K, V]) Put(key K, value V) error {
 	r.checkAvailable()
-	route := routingKeyKind(key, &r.routing, r.m.keyKind)
-	return r.put(key, value, route, keyTag(route))
+	if isStringKey[K]() {
+		route := stringKey(key)
+		return r.putWithPrefixString(key, value, route, keyTag(route), keyPrefix(route))
+	}
+	route := numericRoutingKey(key, &r.routing, r.m.keyKind)
+	return r.putWithPrefixNumeric(key, value, route, keyTag(route), keyPrefix(route))
 }
 
 func (r *Ref[K, V]) put(key K, value V, route string, tag uint16) error {
@@ -226,15 +226,10 @@ func (r *Ref[K, V]) put(key K, value V, route string, tag uint16) error {
 }
 
 func (r *Ref[K, V]) putWithPrefix(key K, value V, route string, tag uint16, prefix uint32) error {
-	l := r.lockPutLeaf(route, tag, prefix)
-	i := l.match(key, tag)
-	if i < leafCapacity {
-		kv := l.recordAtSlot(i)
-		kv.value = value
-		l.mu.Unlock()
-		return nil
+	if isStringKey[K]() {
+		return r.putWithPrefixString(key, value, route, tag, prefix)
 	}
-	return r.insertValueLocked(l, key, value, tag)
+	return r.putWithPrefixNumeric(key, value, route, tag, prefix)
 }
 
 // lockPutLeaf attempts a finger only when four leading key bytes match the

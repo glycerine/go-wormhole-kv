@@ -596,6 +596,7 @@ func (l *leaf[K, V]) split(kv *record[K, V], tag uint16) *leaf[K, V] {
 		if kind := reflect.TypeFor[K]().Kind(); kind != reflect.String {
 			return l.splitDenseNumeric(kv.key, kv.value, tag, kind)
 		}
+		l.prefetchStringSplit()
 		return l.splitDense(kv.key, kv.value, tag)
 	}
 	l.syncSorted()
