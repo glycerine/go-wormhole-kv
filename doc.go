@@ -3,12 +3,11 @@
 // stable record slots with tag-bucket chains, lazy leaf sorting, and versioned two-table metadata updates.
 // It is ported from the C implementation in the parent directory.
 //
-// Construct an ordered-key Map with New. Each concurrent caller needs its own Ref, which
+// Construct a Map with New. Each concurrent caller needs its own Ref, which
 // must be closed after use. Point operations automatically leave their metadata
 // epoch before returning or waiting for a leaf lock. Iterators reserve their
 // Ref and hold a leaf read lock until they advance, Park, or Close; iteration
-// and range deletion are not whole-map transactions. Keys use natural order,
-// with NaNs after positive infinity; NaN payloads
+// and range deletion are not whole-map transactions. Keys use natural order, with NaNs after positive infinity; NaN payloads
 // identify one key, as do positive and negative zero. String keys use Go's
 // bytewise order and may contain arbitrary bytes, including the empty string.
 //

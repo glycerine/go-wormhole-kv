@@ -12,6 +12,7 @@ func TestDenseCompactRebuild(t *testing.T) {
 	for n := 0; n <= leafCapacity; n++ {
 		t.Run(fmt.Sprint(n), func(t *testing.T) {
 			l := &leaf[string, *int]{dense: true, denseStorage: new(denseStorage[string, *int])}
+			fresh := &leaf[string, *int]{dense: true, denseStorage: new(denseStorage[string, *int])}
 			want := &leaf[string, *int]{dense: true, denseStorage: new(denseStorage[string, *int])}
 			for i := 0; i < leafCapacity; i++ {
 				v := i
@@ -28,8 +29,12 @@ func TestDenseCompactRebuild(t *testing.T) {
 			}
 			want.sorted = n
 			l.buildDenseCompact(values, tags)
+			fresh.buildDenseCompactNew(values, tags)
 			if !reflect.DeepEqual(l.denseStorage, want.denseStorage) || l.tags != want.tags || l.ss != want.ss || l.occupied != want.occupied || l.n != want.n || l.sorted != want.sorted {
 				t.Fatal("bulk rebuild differs from ordinary insertion")
+			}
+			if !reflect.DeepEqual(fresh.denseStorage, want.denseStorage) || fresh.tags != want.tags || fresh.ss != want.ss || fresh.occupied != want.occupied || fresh.n != want.n || fresh.sorted != want.sorted {
+				t.Fatal("fresh bulk build differs from ordinary insertion")
 			}
 			for i, v := range values {
 				slot := l.match(v.key, tags[i])

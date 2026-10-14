@@ -234,3 +234,27 @@ func TestPutHintWholeKeyspace(t *testing.T) {
 		t.Fatalf("length=%d want 516", m.Len())
 	}
 }
+
+func TestNumericPutHintArmsAfterRepeatedPrefix(t *testing.T) {
+	l := &leaf[uint64, uint64]{anchor: "\x10", next: &leaf[uint64, uint64]{anchor: "\x20"}, version: 7}
+	r := new(Ref[uint64, uint64])
+	r.rememberNumericPutLeaf(l, 1)
+	if r.putLeaf != nil || !r.putCandidateSeen || r.putCandidate != 1 {
+		t.Fatal("first random prefix published a leaf pointer")
+	}
+	r.rememberNumericPutLeaf(l, 2)
+	if r.putLeaf != nil || !r.putCandidateSeen || r.putCandidate != 2 {
+		t.Fatal("different random prefix published a leaf pointer")
+	}
+	r.rememberNumericPutLeaf(l, 2)
+	if r.putLeaf != l || r.putVersion != 7 || r.putPrefix != 2 || r.putCandidateSeen {
+		t.Fatal("repeated prefix did not arm the numeric write finger")
+	}
+
+	whole := &leaf[uint64, uint64]{version: 9}
+	r = new(Ref[uint64, uint64])
+	r.rememberNumericPutLeaf(whole, 3)
+	if r.putLeaf != whole || !r.putWhole || !r.putPrefixCovered {
+		t.Fatal("whole-keyspace leaf was not cached immediately")
+	}
+}

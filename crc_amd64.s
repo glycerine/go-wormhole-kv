@@ -39,3 +39,10 @@ tail1:
 done:
 	MOVL AX, ret+24(FP)
 	RET
+
+// Raw CRC32C of exactly eight bytes starting from crcSeed.
+TEXT ·crcFixed8(SB),NOSPLIT,$0-12
+	MOVL $0xdeadbeef, AX
+	CRC32Q value+0(FP), AX
+	MOVL AX, ret+8(FP)
+	RET

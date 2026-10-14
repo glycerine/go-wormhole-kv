@@ -4,6 +4,7 @@ import (
 	"os"
 	"runtime"
 	"runtime/pprof"
+	"slices"
 	"strconv"
 	"testing"
 	"unsafe"
@@ -43,13 +44,34 @@ func TestMemoryLayoutProfile(t *testing.T) {
 		}
 	}
 	leaves, entries := 0, 0
+	spans := make([]uint64, 0)
+	bounded := [4]int{}
+	bounds := [...]uint64{128, 256, 512, 1024}
 	for l := m.first; l != nil; l = l.next {
 		leaves++
 		entries += l.n
+		if l.n == 0 {
+			continue
+		}
+		low, high := l.records[l.ss[0]].key, l.records[l.ss[0]].key
+		for _, slot := range l.ss[1:l.n] {
+			key := l.records[slot].key
+			low, high = min(low, key), max(high, key)
+		}
+		span := high - low + 1
+		spans = append(spans, span)
+		for i, bound := range bounds {
+			if span <= bound {
+				bounded[i]++
+			}
+		}
 	}
+	slices.Sort(spans)
 	t.Logf("entries=%d leaves=%d occupancy=%.2f%%; requested sizes: leaf=%d dense=%d metadata=%d",
 		entries, leaves, 100*float64(entries)/float64(leaves*leafCapacity),
 		unsafe.Sizeof(leaf[uint64, uint64]{}), unsafe.Sizeof(denseStorage[uint64, uint64]{}), unsafe.Sizeof(metadata[uint64, uint64]{}))
+	t.Logf("numeric leaf key spans: median=%d; <=128:%d <=256:%d <=512:%d <=1024:%d (of %d nonempty leaves)",
+		spans[len(spans)/2], bounded[0], bounded[1], bounded[2], bounded[3], len(spans))
 	for i, table := range m.tables {
 		secondPages, routePages := 0, 0
 		if table.second != nil {

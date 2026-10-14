@@ -1,6 +1,7 @@
 package wormhole
 
 import (
+	"cmp"
 	"math/rand/v2"
 	"slices"
 	"strings"
@@ -65,6 +66,34 @@ func TestLeafSortedRuns(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestMergeSortedHeadsMatchesCached(t *testing.T) {
+	rng := rand.New(rand.NewPCG(137, 139))
+	for n := 2; n <= leafCapacity; n++ {
+		for split := 1; split < n; split++ {
+			var keys [leafCapacity]uint64
+			var heads [leafCapacity]uint64
+			for i := range n {
+				keys[i] = uint64(rng.Uint64() | 1)
+				heads[i] = keys[i]
+			}
+			permutation := rng.Perm(n)
+			var cached, direct leaf[uint64, uint64]
+			cached.n, direct.n = n, n
+			for i, slot := range permutation {
+				cached.ss[i] = uint8(slot)
+			}
+			slices.SortFunc(cached.ss[:split], func(a, b uint8) int { return cmp.Compare(heads[a], heads[b]) })
+			slices.SortFunc(cached.ss[split:n], func(a, b uint8) int { return cmp.Compare(heads[a], heads[b]) })
+			direct.ss = cached.ss
+			cached.mergeSortedCached(split, &keys, &heads)
+			direct.mergeSortedHeads(split, &heads)
+			if cached.ss != direct.ss {
+				t.Fatalf("n=%d split=%d direct merge differs", n, split)
+			}
+		}
 	}
 }
 
@@ -170,7 +199,11 @@ func TestLeafSortHeadBuckets(t *testing.T) {
 					}
 					l.sorted = leafCapacity - dirty
 					slices.SortFunc(l.ss[:l.sorted], func(a, b uint8) int { return strings.Compare(l.hs[a].key, l.hs[b].key) })
-					l.syncSorted()
+					if prefix == "" {
+						l.syncSorted()
+					} else {
+						l.syncSortedOccupied()
+					}
 					for i, key := range want {
 						if l.at(i).key != key {
 							t.Fatalf("prefix=%q trial=%d dirty=%d index=%d got=%q want=%q", prefix, trial, dirty, i, l.at(i).key, key)

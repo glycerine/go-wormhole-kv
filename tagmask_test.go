@@ -53,3 +53,46 @@ func BenchmarkMetadataTagMask(b *testing.B) {
 		}
 	})
 }
+
+func TestMetadataEitherTag(t *testing.T) {
+	rng := rand.New(rand.NewPCG(151, 157))
+	for step := 0; step < 20000; step++ {
+		var a, b metaTags
+		for i := range a {
+			a[i], b[i] = uint16(rng.Uint32()), uint16(rng.Uint32())
+		}
+		tag := uint16(rng.Uint32())
+		if step%5 == 0 {
+			tag = 0
+		}
+		if step%2 == 0 {
+			a[step%8] = tag
+		}
+		if step%3 == 0 {
+			b[step%8] = tag
+		}
+		if step%7 == 0 {
+			for i := range a {
+				a[i], b[i] = tag, tag
+			}
+		}
+		want := false
+		for i := range a {
+			want = want || a[i] == tag || b[i] == tag
+		}
+		if got := matchEitherTag(&a, &b, tag); got != want {
+			t.Fatalf("step=%d tag=%x a=%v b=%v got=%v want=%v", step, tag, a, b, got, want)
+		}
+		if matchEitherTag(&a, &a, tag) != (scalarTagMask(&a, tag) != 0) {
+			t.Fatal("aliased buckets")
+		}
+	}
+	for lane := range 8 {
+		var a metaTags
+		a[lane] = 0xffff
+		// A first-bucket match must not dereference the unused second bucket.
+		if !matchEitherTag(&a, nil, 0xffff) {
+			t.Fatalf("short circuit lane %d", lane)
+		}
+	}
+}

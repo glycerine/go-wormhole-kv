@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"unsafe"
 )
 
 // ErrAnchorTooLong means splitting a full leaf would require an anchor longer
@@ -66,7 +67,7 @@ func NewWithOptions[K cmp.Ordered, V any](options Options) *Map[K, V] {
 			if options.MetaCache {
 				t.second = new([256]*[256]*metadata[K, V])
 			}
-			t.routes = newNumericRoutes(first)
+			t.routes = newNumericRoutes(unsafe.Pointer(first))
 		}
 		t.put(newMetadata("", crcSeed, first))
 		m.tables[i] = t
@@ -90,9 +91,11 @@ type Ref[K cmp.Ordered, V any] struct {
 	putLeaf          *leaf[K, V]
 	putVersion       uint64
 	putPrefix        uint32
+	putCandidate     uint32
 	putPrefixChecked bool
 	putPrefixCovered bool
-	putWhole         bool    // cached interval covers the entire key space
+	putWhole         bool // cached interval covers the entire key space
+	putCandidateSeen bool
 	routing          [8]byte // caller-owned numeric routing scratch; never retained by metadata
 }
 
@@ -199,7 +202,7 @@ func (r *Ref[K, V]) Probe(key K) bool {
 		return r.probeString(key, route, keyTag(route))
 	}
 	route := numericRoutingKey(key, &r.routing, r.m.keyKind)
-	return r.probeNumeric(key, route, keyTag(route))
+	return r.probeNumeric(key, route, numericKeyTag(&r.routing))
 }
 
 func (r *Ref[K, V]) probe(key K, route string, tag uint16) bool {
@@ -218,7 +221,7 @@ func (r *Ref[K, V]) Put(key K, value V) error {
 		return r.putWithPrefixString(key, value, route, keyTag(route), keyPrefix(route))
 	}
 	route := numericRoutingKey(key, &r.routing, r.m.keyKind)
-	return r.putWithPrefixNumeric(key, value, route, keyTag(route), keyPrefix(route))
+	return r.putWithPrefixNumeric(key, value, route, numericKeyTag(&r.routing), keyPrefix(route))
 }
 
 func (r *Ref[K, V]) put(key K, value V, route string, tag uint16) error {

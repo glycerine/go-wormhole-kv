@@ -157,7 +157,7 @@ type metaTable[K cmp.Ordered, V any] struct {
 	root      *metadata[K, V]             // aliases the existing empty-prefix bucket entry
 	short     [256]*metadata[K, V]        // existing one-byte prefixes; same epoch protection
 	second    *[256]*[256]*metadata[K, V] // sparse two-byte prefix pages for numeric keys
-	routes    *numericRoutes[K, V]
+	routes    *numericRoutes
 }
 
 func newMetaTable[K cmp.Ordered, V any](bucketCount int) *metaTable[K, V] {
@@ -174,6 +174,9 @@ func (t *metaTable[K, V]) choices(hash uint32) (uint32, uint32) {
 func (t *metaTable[K, V]) peek(hash uint32) bool {
 	a, b := t.choices(hash)
 	tag := hashTag(hash)
+	if isStringKey[K]() {
+		return matchEitherTag(&t.tags[a], &t.tags[b], tag)
+	}
 	return matchTagMask(&t.tags[a], tag) != 0 || matchTagMask(&t.tags[b], tag) != 0
 }
 
@@ -478,7 +481,7 @@ func (t *metaTable[K, V]) jump(key string) *leaf[K, V] {
 func (t *metaTable[K, V]) jumpFixed(key string) *leaf[K, V] {
 	if t.routes != nil {
 		if l := t.routes.lookup(key); l != nil {
-			return l
+			return (*leaf[K, V])(l)
 		}
 	}
 	m := t.short[key[0]]
@@ -537,7 +540,7 @@ func (t *metaTable[K, V]) insertAnchor(l *leaf[K, V]) {
 		if l.next != nil {
 			next = l.next.anchor
 		}
-		t.routes.assign(l.anchor, next, l)
+		t.routes.assign(l.anchor, next, unsafe.Pointer(l))
 	}
 	i := 0
 	if l.next != nil {
@@ -592,7 +595,7 @@ func (t *metaTable[K, V]) removeAnchor(l *leaf[K, V]) {
 		if l.next != nil {
 			next = l.next.anchor
 		}
-		t.routes.assign(l.anchor, next, l.prev)
+		t.routes.assign(l.anchor, next, unsafe.Pointer(l.prev))
 	}
 	i := 0
 	if l.prev != nil && l.next != nil {

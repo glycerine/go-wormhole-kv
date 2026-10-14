@@ -253,7 +253,7 @@ func (l *leaf[K, V]) insertEntry(e leafEntry[K, V]) {
 // both magnet shifts and an individual heap allocation per inserted record.
 func (l *leaf[K, V]) insertDenseEntry(key K, value V, tag uint16) {
 	if l.denseStorage == nil {
-		l.denseStorage = new(denseStorage[K, V])
+		l.allocateDenseStorage()
 	}
 	half := 0
 	if l.occupied[0] == ^uint64(0) {
@@ -453,6 +453,72 @@ func (l *leaf[K, V]) syncSorted() {
 			}
 		}
 		sortCached(l.ss[s:l.n], &keys, &heads)
+		if kind == reflect.String {
+			l.mergeSortedCached(s, &keys, &heads)
+		} else {
+			l.mergeSortedHeads(s, &heads)
+		}
+	} else {
+		l.mergeSorted(s)
+	}
+	l.sorted = l.n
+}
+
+// mergeSortedHeads merges numeric runs using their complete encoded order.
+// Equal numeric heads identify the same map key, so a live fresh-insert run
+// needs no fallback K comparison.
+func (l *leaf[K, V]) mergeSortedHeads(s int, heads *[leafCapacity]uint64) {
+	tail := l.n - s
+	if s == 0 || tail == 0 {
+		return
+	}
+	var tmp [leafCapacity / 2]uint8
+	if s <= tail {
+		copy(tmp[:s], l.ss[:s])
+		a, b, out := 0, s, 0
+		for a < s && b < l.n {
+			if heads[tmp[a]] < heads[l.ss[b]] {
+				l.ss[out] = tmp[a]
+				a++
+			} else {
+				l.ss[out] = l.ss[b]
+				b++
+			}
+			out++
+		}
+		copy(l.ss[out:b], tmp[a:s])
+		return
+	}
+	copy(tmp[:tail], l.ss[s:l.n])
+	a, b, out := s-1, tail-1, l.n-1
+	for a >= 0 && b >= 0 {
+		if heads[l.ss[a]] < heads[tmp[b]] {
+			l.ss[out] = tmp[b]
+			b--
+		} else {
+			l.ss[out] = l.ss[a]
+			a--
+		}
+		out--
+	}
+	copy(l.ss[a+1:out+1], tmp[:b+1])
+}
+
+// syncSortedOccupied prepares a deep string leaf immediately before a split.
+// Keeping this separate leaves the ordinary synchronization path unchanged.
+func (l *leaf[K, V]) syncSortedOccupied() {
+	if l.sorted == l.n {
+		return
+	}
+	s := l.sorted
+	if l.n-s > 1 {
+		var keys [leafCapacity]K
+		var heads [leafCapacity]uint64
+		for _, slot := range l.ss[:l.n] {
+			keys[slot] = l.recordAtSlot(int(slot)).key
+			heads[slot] = keyHead(*(*string)(unsafe.Pointer(&keys[slot])))
+		}
+		sortCachedOccupied(l.ss[s:l.n], &keys, &heads)
 		l.mergeSortedCached(s, &keys, &heads)
 	} else {
 		l.mergeSorted(s)
@@ -710,7 +776,7 @@ func (l *leaf[K, V]) splitDense(key K, value V, tag uint16) *leaf[K, V] {
 
 	right := &leaf[K, V]{anchor: anchor, prev: l, next: l.next, dense: true, denseStorage: new(denseStorage[K, V])}
 	l.buildDenseCompact(values[:cut], tags[:cut])
-	right.buildDenseCompact(values[cut:], tags[cut:])
+	right.buildDenseCompactNew(values[cut:], tags[cut:])
 	return right
 }
 
@@ -741,6 +807,27 @@ func (l *leaf[K, V]) buildDenseCompact(values []record[K, V], tags []uint16) {
 	}
 }
 
+// buildDenseCompactNew initializes a freshly allocated unpublished leaf. Its
+// inactive records, tags, indices and portable bucket arrays are already zero.
+func (l *leaf[K, V]) buildDenseCompactNew(values []record[K, V], tags []uint16) {
+	n := len(values)
+	copy(l.records[:], values)
+	copy(l.tags[:], tags)
+	for i := 0; i < n; i++ {
+		l.ss[i] = uint8(i)
+	}
+	l.n, l.sorted = n, n
+	l.occupied[0] = ^uint64(0) >> (64 - min(n, 64))
+	l.occupied[1] = ^uint64(0) >> (64 - max(n-64, 0))
+	if !useLeafSIMD {
+		for i, tag := range tags {
+			bucket := byte(tag)
+			l.chain[i] = l.buckets[bucket]
+			l.buckets[bucket] = uint8(i + 1)
+		}
+	}
+}
+
 // mergeRight moves an adjacent right leaf into l; callers remove its anchor
 // and links separately. Rightward merges preserve the iterator lock order.
 func (l *leaf[K, V]) mergeRight(right *leaf[K, V]) {
@@ -751,4 +838,9 @@ func (l *leaf[K, V]) mergeRight(right *leaf[K, V]) {
 	if wasSorted {
 		l.sorted += right.sorted
 	}
+}
+
+//go:noinline
+func (l *leaf[K, V]) allocateDenseStorage() {
+	l.denseStorage = new(denseStorage[K, V])
 }

@@ -110,12 +110,13 @@ func run() error {
 	if *hotKeys > 0 {
 		fmt.Printf("diagnostic trace repeats the first %d prepared corpus keys; distinct=%d\n", *hotKeys, wantKeys)
 	}
-	//m := wormhole.New[string, string]()
-	m := wormhole.NewWithOptions[string, string](wormhole.Options{MetaCache: true})
+	// Native concbench stores zero-length values and probes only for key
+	// presence. Use a zero-size Go value so both drivers measure a key set.
+	m := wormhole.NewWithOptions[string, struct{}](wormhole.Options{MetaCache: true})
 	if *loadWorkload == "update" {
 		r := m.Ref()
 		for _, key := range keys {
-			if err := r.PutKey(key, ""); err != nil {
+			if err := r.PutKey(key, struct{}{}); err != nil {
 				r.Close()
 				return err
 			}
@@ -158,7 +159,7 @@ func run() error {
 			if *loadLatency {
 				for i, k := range keys[lo:hi] {
 					before := time.Now()
-					if err := r.PutKey(k, ""); err != nil {
+					if err := r.PutKey(k, struct{}{}); err != nil {
 						errors <- err
 						return
 					}
@@ -166,7 +167,7 @@ func run() error {
 				}
 			} else {
 				for _, k := range keys[lo:hi] {
-					if err := r.PutKey(k, ""); err != nil {
+					if err := r.PutKey(k, struct{}{}); err != nil {
 						errors <- err
 						return
 					}

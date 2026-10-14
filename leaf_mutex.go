@@ -16,7 +16,7 @@ const leafWriterBit = uint32(1 << 31)
 type leafRWMutex struct {
 	state                  uint32
 	writerSync, readerSync uint32   // race synchronization addresses, not counters
-	_                      [12]byte // preserve the existing leaf layout
+	_                      [12]byte // keep the following leaf fields at their established offsets
 }
 
 func (m *leafRWMutex) Lock() {

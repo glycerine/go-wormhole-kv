@@ -198,6 +198,36 @@ func TestNaNLastAndIdentity(t *testing.T) {
 	}
 }
 
+func TestNaNSortsAfterPositiveInfinity(t *testing.T) {
+	check := func(t *testing.T, inf, nan float64) {
+		t.Helper()
+		if orderedCompare(inf, nan) >= 0 || orderedCompare(nan, inf) <= 0 {
+			t.Fatal("NaN must sort after +Inf")
+		}
+		if numericOrderBits(inf, reflect.Float64) >= numericOrderBits(nan, reflect.Float64) {
+			t.Fatal("float64 routing must place NaN after +Inf")
+		}
+	}
+	check(t, math.Inf(1), math.NaN())
+	check(t, math.Inf(1), math.Float64frombits(0xfff8000000000042))
+
+	inf32, nan32 := float32(math.Inf(1)), math.Float32frombits(0xffc01234)
+	if orderedCompare(inf32, nan32) >= 0 || orderedCompare(nan32, inf32) <= 0 {
+		t.Fatal("float32 NaN must sort after +Inf")
+	}
+	if numericOrderBits(inf32, reflect.Float32) >= numericOrderBits(nan32, reflect.Float32) {
+		t.Fatal("float32 routing must place NaN after +Inf")
+	}
+
+	namedInf, namedNaN := namedFloat(math.Inf(1)), namedFloat(math.NaN())
+	if orderedCompare(namedInf, namedNaN) >= 0 || orderedCompare(namedNaN, namedInf) <= 0 {
+		t.Fatal("named float NaN must sort after +Inf")
+	}
+	if numericOrderBits(namedInf, reflect.Float64) >= numericOrderBits(namedNaN, reflect.Float64) {
+		t.Fatal("named float routing must place NaN after +Inf")
+	}
+}
+
 func TestGenericConcurrentWrites(t *testing.T) {
 	m := New[uint64, *uint64]()
 	var wg sync.WaitGroup

@@ -7,6 +7,7 @@ import (
 	"math/rand/v2"
 	"runtime"
 	"testing"
+	"unsafe"
 )
 
 func TestPreparedKey(t *testing.T) {
@@ -123,5 +124,17 @@ func TestPreparedStringBorrowsKey(t *testing.T) {
 	}
 	if prepared.String() != "borrowed immutable string" {
 		t.Fatal("prepared key changed")
+	}
+}
+
+func TestPreparedKeySize(t *testing.T) {
+	if unsafe.Sizeof(uintptr(0)) != 8 {
+		t.Skip("64-bit layout assertion")
+	}
+	if got, want := unsafe.Sizeof(Key[string]{}), uintptr(32); got != want {
+		t.Fatalf("Key[string] size = %d, want %d", got, want)
+	}
+	if got, want := unsafe.Sizeof(Key[uint64]{}), uintptr(24); got != want {
+		t.Fatalf("Key[uint64] size = %d, want %d", got, want)
 	}
 }

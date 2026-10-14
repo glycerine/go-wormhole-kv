@@ -1,7 +1,9 @@
 package wormhole
 
 import (
+	"encoding/binary"
 	"math/rand/v2"
+	"strconv"
 	"testing"
 )
 
@@ -29,6 +31,33 @@ func TestCRCUnalignedExtensions(t *testing.T) {
 	})
 }
 
+func BenchmarkCRCShortLengths(b *testing.B) {
+	text := "abcdefghijklmnopqrstuvwxyz0123456789"
+	for _, n := range []int{1, 2, 3, 4, 5, 8, 12, 16, 32} {
+		b.Run(strconv.Itoa(n), func(b *testing.B) {
+			key := text[:n]
+			var h uint32 = crcSeed
+			for range b.N {
+				h = crcExtend(h, key)
+			}
+			if h == 0 {
+				b.Log(h)
+			}
+		})
+	}
+}
+
+func TestNumericKeyTagMatchesRoute(t *testing.T) {
+	rng := rand.New(rand.NewPCG(19, 73))
+	for range 100000 {
+		var route [8]byte
+		binary.BigEndian.PutUint64(route[:], rng.Uint64())
+		if got, want := numericKeyTag(&route), keyTag(string(route[:])); got != want {
+			t.Fatalf("tag %04x != %04x for %x", got, want, route)
+		}
+	}
+}
+
 func BenchmarkCRCShort(b *testing.B) {
 	key := "abcdefgh"
 	b.Run("portable", func(b *testing.B) {
@@ -47,6 +76,17 @@ func BenchmarkCRCShort(b *testing.B) {
 		}
 		if h == 0 {
 			b.Log(h)
+		}
+	})
+	b.Run("fixed8", func(b *testing.B) {
+		var route [8]byte
+		binary.BigEndian.PutUint64(route[:], 0x6162636465666768)
+		var tag uint16
+		for range b.N {
+			tag = numericKeyTag(&route)
+		}
+		if tag == 0 {
+			b.Log(tag)
 		}
 	})
 }

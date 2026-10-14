@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/glycerine/insdict"
-	"github.com/glycerine/wormhole/go/internal/cpuaffinity"
+	"github.com/glycerine/go-wormhole-kv/internal/cpuaffinity"
 	"github.com/tidwall/btree"
 )
 

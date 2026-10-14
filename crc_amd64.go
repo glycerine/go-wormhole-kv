@@ -3,6 +3,7 @@ package wormhole
 import (
 	"os"
 	"strings"
+	"unsafe"
 )
 
 var shortCRCEnabled = func() bool {
@@ -27,5 +28,18 @@ func crcExtend(seed uint32, key string) uint32 {
 
 //go:noescape
 func crcShort(seed uint32, key string) uint32
+
+// numericKeyTag hashes the fixed eight-byte numeric route without entering the
+// variable-length CRC loop. The native uint64 load preserves the route's bytes
+// when CRC32Q consumes the register from low to high byte.
+func numericKeyTag(route *[8]byte) uint16 {
+	if shortCRCEnabled {
+		return hashTag(crcFixed8(*(*uint64)(unsafe.Pointer(&route[0]))))
+	}
+	return keyTag(unsafe.String(&route[0], len(route)))
+}
+
+//go:noescape
+func crcFixed8(value uint64) uint32
 
 func hasCRC32() bool

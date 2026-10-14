@@ -57,7 +57,14 @@ func (l *leaf[K, V]) splitDenseNumeric(key K, value V, tag uint16, kind reflect.
 func (l *leaf[K, V]) splitDenseRetainLeft(right *leaf[K, V], is, cut int, key K, value V, tag uint16) {
 	// Preserve stable slots on the left. Only records crossing the split are
 	// copied out and cleared; the caller already selected the separator.
-	oldSlots := l.ss
+	// Incoming-right splits leave the complete left sorted prefix unchanged.
+	// Preserve a copy only when inserting on the left will mutate that prefix.
+	var oldSlots [leafCapacity]uint8
+	sourceSlots := &l.ss
+	if is < cut {
+		oldSlots = l.ss
+		sourceSlots = &oldSlots
+	}
 	rightSlot := 0
 	for i := cut; i <= leafCapacity; i++ {
 		if i == is {
@@ -68,7 +75,7 @@ func (l *leaf[K, V]) splitDenseRetainLeft(right *leaf[K, V], is, cut int, key K,
 			if i > is {
 				rank--
 			}
-			slot := oldSlots[rank]
+			slot := (*sourceSlots)[rank]
 			right.records[rightSlot] = l.records[slot]
 			right.tags[rightSlot] = l.tags[slot]
 			l.records[slot] = record[K, V]{}
@@ -86,15 +93,17 @@ func (l *leaf[K, V]) splitDenseRetainLeft(right *leaf[K, V], is, cut int, key K,
 		l.insertDenseEntry(key, value, tag)
 		inserted = l.ss[cut-1]
 	}
-	for i := 0; i < cut; i++ {
-		if i == is {
-			l.ss[i] = inserted
-		} else {
-			rank := i
-			if i > is {
-				rank--
+	if is < cut {
+		for i := 0; i < cut; i++ {
+			if i == is {
+				l.ss[i] = inserted
+			} else {
+				rank := i
+				if i > is {
+					rank--
+				}
+				l.ss[i] = oldSlots[rank]
 			}
-			l.ss[i] = oldSlots[rank]
 		}
 	}
 	l.n = cut
