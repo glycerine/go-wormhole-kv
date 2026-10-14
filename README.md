@@ -20,8 +20,33 @@ write and read performance is the name of the game her. And, oh boy, does Wormho
 deliver. 
 
 
+
 Our Go port turns this up to 11, and even surpasses the performance
 of the original C.
+
+C Wormhole, reading with 20 threads:
+~~~
+concbench.out words.txt 1000000 20
+...
+probe with 20 threads. each round takes 3 seconds
+probe x20 51.89 mops
+probe x20 52.03 mops
+probe x20 51.98 mops
+~~~
+
+Go Wormhole, reading with 20 goroutines, gets 13% more throughput, 
+approaching 60 million reads per second on the [words.txt corpus of 479K English words](https://github.com/dwyl/english-words).
+These words range from one to 45 characters, with a median of 9 and a mean of 9.4 characters.
+
+~~~
+concbench words.txt 1000000 20
+...
+probe with 20 threads. each round takes 3s
+probe x20 59.60 mops count=178990000 misses=0
+probe x20 59.02 mops count=177190000 misses=0
+probe x20 58.94 mops count=177010000 misses=0
+~~~
+
 
 Reading and writing goroutines share a wormhole Map, but each uses its own Ref (handle)
 to the map. The user must call Close() on it when done with the Ref.
