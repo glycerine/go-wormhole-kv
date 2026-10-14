@@ -1,5 +1,10 @@
 # Concurrency correctness audit
 
+Summary: our rule is only one Ref per goroutine. If you violate this rule by
+using two or more Ref per goroutine, you may deadlock your goroutine. The 
+following details are preserved as a warning against breaking this rule, 
+to provide details of the deadlock scenario.
+
 Audited commit: `6c103e489e2178282d6f8737a1a23107b524b3a6`.
 Audit date: 2026-10-14.
 
