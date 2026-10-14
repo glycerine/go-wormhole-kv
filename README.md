@@ -16,8 +16,8 @@ RCU (Read-Copy-Update) approach, although still does leaf locking with a custom
 optimistic spin-lock. Multiple simultaneous writers and readers are supported.
 
 Serializable transactions are not an aim; unabashed maximizing of single key
-write and read performance is the name of the game her. And, oh boy, does Wormhole
-deliver. 
+write and read performance is the name of the game here. And oh boy, does Wormhole
+deliver.
 
 Our Go port turns this up to 11, and even surpasses the performance
 of the original C.
