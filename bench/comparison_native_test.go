@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/glycerine/bufftree"
-	"github.com/glycerine/rbtree"
 	wormhole "github.com/glycerine/go-wormhole-kv"
+	"github.com/glycerine/rbtree"
 	"github.com/tidwall/btree"
 )
 
@@ -118,7 +118,7 @@ func (m *nativeRBTree) Scan(start uint64, length int, visit func(uint64, uint64)
 }
 
 // Compare identical uint64 data, uniform lookup/update traces, and unique
-// scrambled insertions. All point operations use the same interface dispatch.
+// scrambled insertions. Timed point loops use concrete container types.
 // Map writes use assignment alone, matching Put's void return contract.
 
 type nativePointLayout struct {
@@ -154,37 +154,254 @@ func nativePointCases(n int) []comparisonBenchmark {
 	for i := range freshKeys {
 		freshKeys[i] = nativeBenchKey(i) | 1
 	}
-	for _, layout := range nativePointLayouts(n) {
-		for _, op := range []string{"GetHit", "GetMiss"} {
-			cases = append(cases, comparisonBenchmark{layout.name + "/" + op, func(b *testing.B) {
-				idx := loadNativePoints(layout, n)
-				defer closeComparison(idx)
-				var sum uint64
-				b.ReportAllocs()
-				b.ResetTimer()
-				for i := 0; i < b.N; i++ {
-					key := ops[i%len(ops)].key
-					switch op {
-					case "GetHit":
-						sum += idx.Get(key)
-					case "GetMiss":
-						sum += idx.Get(key | 1)
-					case "Update":
-						value := uint64(i % len(ops))
-						if (i/len(ops))&1 != 0 {
-							value += uint64(len(ops))
-						}
-						idx.Put(key, value)
-					}
-				}
-				b.StopTimer()
-				benchSink = sum
-			}})
+
+	cases = append(cases, comparisonBenchmark{"Wormhole/GetHit", func(b *testing.B) {
+		idx := newNativeWormhole()
+		defer idx.Close()
+		for i := 0; i < n; i++ {
+			idx.Put(nativeBenchKey(i), uint64(i))
 		}
-		cases = append(cases, comparisonBenchmark{layout.name + "/FreshPut", func(b *testing.B) {
-			benchmarkNativeFreshPut(b, layout, n, freshKeys)
-		}})
-	}
+		var sum uint64
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			key := ops[i%len(ops)].key
+			sum += idx.Get(key)
+		}
+		b.StopTimer()
+		benchSink = sum
+	}})
+
+	cases = append(cases, comparisonBenchmark{"Wormhole/GetMiss", func(b *testing.B) {
+		idx := newNativeWormhole()
+		defer idx.Close()
+		for i := 0; i < n; i++ {
+			idx.Put(nativeBenchKey(i), uint64(i))
+		}
+		var sum uint64
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			key := ops[i%len(ops)].key | 1
+			sum += idx.Get(key)
+		}
+		b.StopTimer()
+		benchSink = sum
+	}})
+	cases = append(cases, comparisonBenchmark{"Wormhole/FreshPut", func(b *testing.B) {
+		benchmarkNativeWormholeFreshPut(b, n, freshKeys)
+	}})
+
+	cases = append(cases, comparisonBenchmark{"Turtle/GetHit", func(b *testing.B) {
+		idx := newNativeTurtle()
+		for i := 0; i < n; i++ {
+			idx.Put(nativeBenchKey(i), uint64(i))
+		}
+		var sum uint64
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			key := ops[i%len(ops)].key
+			sum += idx.Get(key)
+		}
+		b.StopTimer()
+		benchSink = sum
+	}})
+
+	cases = append(cases, comparisonBenchmark{"Turtle/GetMiss", func(b *testing.B) {
+		idx := newNativeTurtle()
+		for i := 0; i < n; i++ {
+			idx.Put(nativeBenchKey(i), uint64(i))
+		}
+		var sum uint64
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			key := ops[i%len(ops)].key | 1
+			sum += idx.Get(key)
+		}
+		b.StopTimer()
+		benchSink = sum
+	}})
+	cases = append(cases, comparisonBenchmark{"Turtle/FreshPut", func(b *testing.B) {
+		benchmarkNativeTurtleFreshPut(b, n, freshKeys)
+	}})
+
+	cases = append(cases, comparisonBenchmark{"Tree/GetHit", func(b *testing.B) {
+		idx := bufftree.NewBPTree[uint64, uint64](nil)
+		for i := 0; i < n; i++ {
+			idx.Put(nativeBenchKey(i), uint64(i))
+		}
+		var sum uint64
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			key := ops[i%len(ops)].key
+			sum += idx.Get(key)
+		}
+		b.StopTimer()
+		benchSink = sum
+	}})
+
+	cases = append(cases, comparisonBenchmark{"Tree/GetMiss", func(b *testing.B) {
+		idx := bufftree.NewBPTree[uint64, uint64](nil)
+		for i := 0; i < n; i++ {
+			idx.Put(nativeBenchKey(i), uint64(i))
+		}
+		var sum uint64
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			key := ops[i%len(ops)].key | 1
+			sum += idx.Get(key)
+		}
+		b.StopTimer()
+		benchSink = sum
+	}})
+	cases = append(cases, comparisonBenchmark{"Tree/FreshPut", func(b *testing.B) {
+		benchmarkNativeTreeFreshPut(b, n, freshKeys)
+	}})
+
+	cases = append(cases, comparisonBenchmark{"GoMap/GetHit", func(b *testing.B) {
+		idx := make(nativeUint64Map, n)
+		for i := 0; i < n; i++ {
+			idx.Put(nativeBenchKey(i), uint64(i))
+		}
+		var sum uint64
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			key := ops[i%len(ops)].key
+			sum += idx.Get(key)
+		}
+		b.StopTimer()
+		benchSink = sum
+	}})
+
+	cases = append(cases, comparisonBenchmark{"GoMap/GetMiss", func(b *testing.B) {
+		idx := make(nativeUint64Map, n)
+		for i := 0; i < n; i++ {
+			idx.Put(nativeBenchKey(i), uint64(i))
+		}
+		var sum uint64
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			key := ops[i%len(ops)].key | 1
+			sum += idx.Get(key)
+		}
+		b.StopTimer()
+		benchSink = sum
+	}})
+	cases = append(cases, comparisonBenchmark{"GoMap/FreshPut", func(b *testing.B) {
+		benchmarkNativeGoMapFreshPut(b, n, freshKeys)
+	}})
+
+	cases = append(cases, comparisonBenchmark{"Tidwall/GetHit", func(b *testing.B) {
+		idx := &nativeTidwallMap{}
+		for i := 0; i < n; i++ {
+			idx.Put(nativeBenchKey(i), uint64(i))
+		}
+		var sum uint64
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			key := ops[i%len(ops)].key
+			sum += idx.Get(key)
+		}
+		b.StopTimer()
+		benchSink = sum
+	}})
+
+	cases = append(cases, comparisonBenchmark{"Tidwall/GetMiss", func(b *testing.B) {
+		idx := &nativeTidwallMap{}
+		for i := 0; i < n; i++ {
+			idx.Put(nativeBenchKey(i), uint64(i))
+		}
+		var sum uint64
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			key := ops[i%len(ops)].key | 1
+			sum += idx.Get(key)
+		}
+		b.StopTimer()
+		benchSink = sum
+	}})
+	cases = append(cases, comparisonBenchmark{"Tidwall/FreshPut", func(b *testing.B) {
+		benchmarkNativeTidwallFreshPut(b, n, freshKeys)
+	}})
+
+	cases = append(cases, comparisonBenchmark{"RBTree/GetHit", func(b *testing.B) {
+		idx := newNativeRBTree()
+		for i := 0; i < n; i++ {
+			idx.Put(nativeBenchKey(i), uint64(i))
+		}
+		var sum uint64
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			key := ops[i%len(ops)].key
+			sum += idx.Get(key)
+		}
+		b.StopTimer()
+		benchSink = sum
+	}})
+
+	cases = append(cases, comparisonBenchmark{"RBTree/GetMiss", func(b *testing.B) {
+		idx := newNativeRBTree()
+		for i := 0; i < n; i++ {
+			idx.Put(nativeBenchKey(i), uint64(i))
+		}
+		var sum uint64
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			key := ops[i%len(ops)].key | 1
+			sum += idx.Get(key)
+		}
+		b.StopTimer()
+		benchSink = sum
+	}})
+	cases = append(cases, comparisonBenchmark{"RBTree/FreshPut", func(b *testing.B) {
+		benchmarkNativeRBTreeFreshPut(b, n, freshKeys)
+	}})
+
+	cases = append(cases, comparisonBenchmark{"Insdict/GetHit", func(b *testing.B) {
+		idx := newComparisonInsdict[uint64, uint64](n)
+		for i := 0; i < n; i++ {
+			idx.Put(nativeBenchKey(i), uint64(i))
+		}
+		var sum uint64
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			key := ops[i%len(ops)].key
+			sum += idx.Get(key)
+		}
+		b.StopTimer()
+		benchSink = sum
+	}})
+
+	cases = append(cases, comparisonBenchmark{"Insdict/GetMiss", func(b *testing.B) {
+		idx := newComparisonInsdict[uint64, uint64](n)
+		for i := 0; i < n; i++ {
+			idx.Put(nativeBenchKey(i), uint64(i))
+		}
+		var sum uint64
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			key := ops[i%len(ops)].key | 1
+			sum += idx.Get(key)
+		}
+		b.StopTimer()
+		benchSink = sum
+	}})
+	cases = append(cases, comparisonBenchmark{"Insdict/FreshPut", func(b *testing.B) {
+		benchmarkNativeInsdictFreshPut(b, n, freshKeys)
+	}})
+
 	return pinComparisonCases(cases)
 }
 
