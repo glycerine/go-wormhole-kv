@@ -95,7 +95,7 @@ and all support ordered scans and range queries.
 | builtin Go map    |    2364608 | 2.26 | 23.65 |                                  4248 |
 
 
-# concurreny design
+# concurrency design
 
 Reading and writing goroutines share a wormhole Map, but each uses its own Ref (handle)
 to the map. The user must call Close() on it when done with the Ref.
