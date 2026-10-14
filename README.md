@@ -268,7 +268,7 @@ enabled.
 By default we have turned off the Meta data cache of the original design.
 This saves about 38% of memory use.
 
-The Options.MetaCahce = true can restore it. The difference in Get hit performance varies; 
+The Options.MetaCache = true can restore it. The difference in Get hit performance varies; 
 we observe between a few percent faster depending on the data set.
 
 ~~~
