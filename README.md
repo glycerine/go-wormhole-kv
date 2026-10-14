@@ -107,7 +107,7 @@ to the map. The user must call Close() on it when done with the Ref.
 | Iterator     | One goroutine at a time. Reserves its Ref until closed, even while parked. |
 | Prepared Key | May be shared across goroutines. |
 
-These contracts are documented in [map.go](/Users/jaten/go/src/github.com/glycerine/go-wormhole-kv/map.go:83).
+These contracts are documented in [map.go](map.go:83).
 
 RCU is used to:
 
@@ -123,7 +123,7 @@ Individual point operations are synchronized, but a sequence such as Get followe
 - Update: atomically inspect and replace an existing key.
 - Inspect: inspect under a leaf read lock.
 
-These callbacks execute under the relevant leaf lock. They must not re-enter operations that acquire leaf locks on the same map, even through another Ref. See [callback.go](/Users/jaten/go/src/github.com/glycerine/go-wormhole-kv/callback.go:6).
+These callbacks execute under the relevant leaf lock. They must not re-enter operations that acquire leaf locks on the same map, even through another Ref. See [callback.go](callback.go:6).
 
 Important limits:
 
