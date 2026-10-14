@@ -50,13 +50,13 @@ reflect randomized searching. The last shows unsorted sequential
 scan so that the hash tables can really strut (last two columns). All numbers are the average nanoseconds per key.
 This is Apple silicon ARM64 numbers; AMD64 are similarly ratio-ed.
 
-| Operation (report ns/key)     | Wormhole[1] | Turtle[2] | BP-Tree[3] | tidwall/btree[4] | red-black tree[5] | insdict[6] | builtin map |
-| ----------------------------- | ----------: | --------: | ---------: | ---------------: | --------------: | ---------: | ----------: |
-| Get hit                       |     18.0 |   57.6 |    51.3 |          56.9 |        102.0 |     5.6 |         4.0 |
-| Get miss                      |     18.1 |   61.9 |    61.7 |          56.6 |        129.2 |     5.5 |         4.4 |
-| Put fresh key                 |     48.4 |   46.1 |    66.4 |          96.8 |        185.8 |    18.8 |        34.4 |
-| Ordered scan                  |     1.28 |   1.28 |    1.35 |          1.79 |         9.93 |    1.97 |         N/A |
-| Full traversal (unordered ok) |     1.32 |   1.28 |    1.94 |          1.03 |         9.83 |    0.31 |        4.68 |
+| Operation (report ns/key)  | Wormhole[1] | Turtle[2] | BP-Tree[3] | tidwall/btree[4] | red-black tree[5] | insdict[6] | builtin map |
+| -------------------------- | ----------: | --------: | ---------: | ---------------: | --------------: | ---------: | ----------: |
+| Get hit                    |     18.0 |   57.6 |    51.3 |          56.9 |        102.0 |     5.6 |         4.0 |
+| Get miss                   |     18.1 |   61.9 |    61.7 |          56.6 |        129.2 |     5.5 |         4.4 |
+| Put fresh                  |     48.4 |   46.1 |    66.4 |          96.8 |        185.8 |    18.8 |        34.4 |
+| Ordered scan               |     1.28 |   1.28 |    1.35 |          1.79 |         9.93 |    1.97 |         N/A |
+| Unordered scan             |         1.32 |   1.28 |    1.94 |          1.03 |         9.83 |    0.31 |        4.68 |
 
 In these micro benchmarks: 
 
