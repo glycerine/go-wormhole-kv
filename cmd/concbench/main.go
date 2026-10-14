@@ -27,6 +27,7 @@ func main() {
 }
 
 func run() error {
+	pinWorkers := flag.Bool("pin", runtime.GOOS == "linux" || runtime.GOOS == "darwin" && runtime.GOARCH == "amd64", "pin workers using OS affinity (unavailable on Darwin/arm64)")
 	profile := flag.String("cpuprofile", "", "write CPU profile of probe rounds")
 	loadOnly := flag.Bool("load-only", false, "exit after loading, for external write profiling")
 	loadProfile := flag.String("loadprofile", "", "write load CPU/mutex/block profiles with this path prefix")
@@ -67,11 +68,20 @@ func run() error {
 	if *hotKeys < 0 || *hotKeys > n || *hotKeys > 0 && *loadWorkload == "ascending" {
 		return fmt.Errorf("hot-keys must be between 0 and keys and cannot be used with ascending")
 	}
-	cpus, err := cpuaffinity.CPUs()
-	if err != nil {
-		return err
+	cpus := []int{0}
+	pin := func(int) (func() error, error) {
+		return func() error { return nil }, nil
 	}
-	fmt.Printf("worker CPUs=%v (worker i uses CPUs[i %% %d], verified after pinning)\n", cpus, len(cpus))
+	if *pinWorkers {
+		cpus, err = cpuaffinity.CPUs()
+		if err != nil {
+			return err
+		}
+		pin = cpuaffinity.Pin
+		fmt.Printf("worker CPUs=%v (worker i uses CPUs[i %% %d], verified after pinning)\n", cpus, len(cpus))
+	} else {
+		fmt.Println("worker affinity disabled; OS scheduler chooses CPUs")
+	}
 	runtime.GOMAXPROCS(max(*loadWorkers, threads))
 	f, err := os.Open(flag.Arg(0))
 	if err != nil {
@@ -139,7 +149,7 @@ func run() error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			restore, err := cpuaffinity.Pin(cpus[worker%len(cpus)])
+			restore, err := pin(cpus[worker%len(cpus)])
 			if err != nil {
 				errors <- err
 				return
@@ -192,7 +202,7 @@ func run() error {
 		slices.Sort(latencies)
 		quantile := func(p int) int64 { return latencies[(len(latencies)-1)*p/1000] }
 		fmt.Printf("load latency ns count=%d p50=%d p95=%d p99=%d p999=%d max=%d (clock overhead included)\n", n, quantile(500), quantile(950), quantile(990), quantile(999), latencies[n-1])
-		restore, err := cpuaffinity.Pin(cpus[0])
+		restore, err := pin(cpus[0])
 		if err != nil {
 			return err
 		}
@@ -207,7 +217,7 @@ func run() error {
 			return err
 		}
 		slices.Sort(control)
-		fmt.Printf("clock control cpu=%d count=%d ns/pair=%.2f p50=%d p99=%d (not subtracted)\n", cpus[0], len(control), float64(controlElapsed.Nanoseconds())/float64(len(control)), control[(len(control)-1)/2], control[(len(control)-1)*99/100])
+		fmt.Printf("clock control affinity=%v cpu-label=%d count=%d ns/pair=%.2f p50=%d p99=%d (not subtracted)\n", *pinWorkers, cpus[0], len(control), float64(controlElapsed.Nanoseconds())/float64(len(control)), control[(len(control)-1)/2], control[(len(control)-1)*99/100])
 	}
 	if *loadOnly {
 		return nil
@@ -238,7 +248,7 @@ func run() error {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				restore, err := cpuaffinity.Pin(cpus[worker%len(cpus)])
+				restore, err := pin(cpus[worker%len(cpus)])
 				if err != nil {
 					pinErrors <- err
 					return

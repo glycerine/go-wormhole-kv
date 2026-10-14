@@ -201,3 +201,11 @@ License: MIT (see LICENSE file)
 
 Derived under MIT license from the upstream C code https://github.com/wuxb45/wormhole , which is
 Copyright (c) 2016-2026 by Xingbo Wu
+
+On Darwin/ARM64 (Apple Silicon), the library uses its ARM64 release-store
+assembly and portable implementations of the remaining architecture-specific
+helpers. `concbench` defaults to unpinned workers on this platform because
+macOS does not provide CPU affinity there. Use `-pin=false` to request unpinned
+runs explicitly on any platform; the command reports when affinity is disabled.
+`-pin=true` requires supported OS affinity (Linux or Darwin/AMD64 with cgo).
+Benchmarks that require CPU pinning still report an error when it is unavailable.

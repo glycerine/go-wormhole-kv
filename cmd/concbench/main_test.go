@@ -21,6 +21,7 @@ func TestConcbenchThreadArgument(t *testing.T) {
 		want  string
 		bad   bool
 	}{
+		{"explicit-unpinned", []string{"-pin=false"}, "worker affinity disabled", false},
 		{"positional", nil, "load x4 ", false},
 		{"explicit-single-loader", []string{"-load-workers=1"}, "load x1 ", false},
 		{"reject-zero", []string{"-load-workers=0"}, "positive load-workers", true},
