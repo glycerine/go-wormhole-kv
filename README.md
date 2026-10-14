@@ -48,7 +48,7 @@ probe x20 58.94 mops count=177010000 misses=0
 The table below is for Wormhole in Go, on map[uint64]uint64 trees and hash tables. The first two get lines
 reflect randomized searching. The last shows unsorted sequential
 scan so the hash tables can really strut. All numbers are the average nanoseconds per key.
-Apple silicon ARM64 numbers are shown; AMD64 numbers have similar ratios.
+Apple silicon ARM64 numbers are shown here.
 
 | Operation (report ns/key)  | Wormhole[1] | Turtle[2] | BP-Tree[3] | tidwall/btree[4] | red-black tree[5] | insdict[6] | builtin map |
 | -------------------------- | ----------: | --------: | ---------: | ---------------: | --------------: | ---------: | ----------: |
@@ -294,7 +294,7 @@ $ make memory2 # meta cache on.
 > 3.1M/1.45M => 2.1x less GC trace load.
 >
 
-With the metadata caches in use:
+With the metadata caches in use (amd64 numbers)
 
 | Operation (showing ns/key)    | Wormhole | Turtle | BP-Tree | tidwall/btree | red-blk tree | insdict | builtin map |
 | ----------------------------- | -------: | -----: | ------: | ------------: | -----------: | ------: | ----------: |
