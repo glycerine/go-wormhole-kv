@@ -71,10 +71,15 @@ Full table scan performance is dominated by the insdict, where pre-fetching sequ
 and all support ordered scans and range queries.
 
 [1] Wormhole is this repo; https://github.com/glycerine/go-wormhole-kv
+
 [2] Turtle is an unpublished (and much faster) port of: https://github.com/mathworks/turtle_kv
+
 [3] BP-tree: https://github.com/glycerine/bufftree
+
 [4] tidwall/btree is: https://github.com/tidwall/btree
+
 [5] the red-black tree used was: https://github.com/glycerine/rbtree
+
 [6] insdict.Dict is: https://github.com/glycerine/insdict
 
 # concurreny design
