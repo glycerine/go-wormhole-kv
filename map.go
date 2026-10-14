@@ -1,6 +1,3 @@
-// Ported from wh.c, Copyright (c) 2016--2021 Wu, Xingbo <wuxb45@gmail.com>.
-// See LICENSE in the repository root. No warranty, explicit or implicit.
-
 package wormhole
 
 import (
@@ -81,8 +78,9 @@ func NewWithOptions[K cmp.Ordered, V any](options Options) *Map[K, V] {
 func (m *Map[K, V]) Len() int64 { return m.epochs.length() }
 
 // Ref owns a reader epoch registration. Use it from one goroutine at a time,
-// do not copy it, and Close it when finished. Operations automatically park
-// between calls, so an idle reference does not delay metadata writers.
+// do not copy it, and Close it when finished. Operations automatically
+// mark the Ref inactive after routing,
+// so an idle Ref does not delay reuse of old metadata tables.
 type Ref[K cmp.Ordered, V any] struct {
 	m                *Map[K, V]
 	epoch            *epochRef

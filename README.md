@@ -1,9 +1,65 @@
 # Wormhole in Go
 
-Here we implement the [ordered in-memory map Wormhole](https://github.com/wuxb45/wormhole) 
-in Go. The theory of operation is described in [the Eurosys 2019 paper](wormhole.pdf). 
-The upstream implementation is C. The port keeps
-the hash-indexed prefix trie, two-choice cuckoo metadata tables, linked leaves
+Wormhole is an interesting and very fast design for 
+an in-memory ordered-key/value store, [originally in C](https://github.com/wuxb45/wormhole) 
+
+The theory of operation is described in [the Eurosys 2019 paper](wormhole.pdf) by
+Xingo Wu, Fan Ni, and Song Jiang.
+
+# concurrency - the name of the game
+
+The concurrency design in the paper/C repo is really aiming for high performance, and
+we remain faithful to that emphasis in the Go port.
+
+This is an industrial strength key/value store design. It uses a linux-kernel like
+RCU (Read-Copy-Update) approach, although still does leaf locking with a custom
+optimistic spin-lock. Multiple simultaneous writers and readers are supported.
+
+Serializable transactions are not an aim; unabashed maximizing of single key
+write and read performance is the name of the game her. And, oh boy, does Wormhole
+deliver. 
+
+
+Our Go port turns this up to 11, and even surpasses the performance
+of the original C.
+
+Reading and writing goroutines share a wormhole Map, but each uses its own Ref (handle)
+to the map. The user must call Close() on it when done with the Ref.
+
+| Object       | Concurrency contract |
+|--------------|----------------------|
+| Map          | Shared across goroutines. Concurrent Ref() creation and Len() calls are supported. Do not copy the map. |
+| Ref          | One goroutine at a time. Do not copy it. Call Close() when finished; closing must not overlap its operations. |
+| Iterator     | One goroutine at a time. Reserves its Ref until closed, even while parked. |
+| Prepared Key | May be shared across goroutines. |
+
+These contracts are documented in [map.go](/Users/jaten/go/src/github.com/glycerine/go-wormhole-kv/map.go:83).
+
+The RCU-like design is still present, alongside locking. It has two distinct jobs:
+
+1. Protect routing metadata with epochs and grace periods. Structural writers update the inactive prefix table and atomically publish a new version. Before reusing the old table, they wait for readers using that version to finish. Readers automatically announce and leave their metadata epochs; developers don’t manually manage them. Go GC handles object lifetime, but cannot replace this grace period because the metadata tables are reused. See [epoch.go](epoch.go:24).
+
+2. Protect records with per-leaf read/write locks. Multiple readers can access a leaf together. A writer gets exclusive access to that leaf. Writers targeting different leaves can proceed concurrently; structural metadata changes serialize through metalock. After routing, callers leave their metadata epoch before waiting for a leaf lock, then validate the leaf version and retry if necessary. See [map.go](map.go:154).
+
+Consequently, reads are not lock-free, and writes are not globally serialized.
+
+Individual point operations are synchronized, but a sequence such as Get followed by Put is not an atomic read-modify-write. Two callers could overwrite each other’s updates. We already offer callbacks for that:
+
+- Merge: atomically inspect and insert/replace one key, including an absent key.
+- Update: atomically inspect and replace an existing key.
+- Inspect: inspect under a leaf read lock.
+
+These callbacks execute under the relevant leaf lock. They must not re-enter operations that acquire leaf locks on the same map, even through another Ref. See [callback.go](/Users/jaten/go/src/github.com/glycerine/go-wormhole-kv/callback.go:6).
+
+Important limits:
+
+- Scans and iterators are not whole-map snapshots. Later leaves may reflect later concurrent updates. A positioned iterator holds a leaf read lock and can delay writers until it advances, parks, or closes.
+- Range deletion is not a multi-key transaction. Concurrent operations can interleave as it progresses.
+
+
+# broader details
+
+The port keeps the hash-indexed prefix trie, two-choice cuckoo metadata tables, linked leaves
 of 128 records, lazy sorted indices, separator selection,
 and native split/merge policies. All key types use stable slots, tag-bucket
 chains and leaf-owned record arrays to avoid pointer shifts and per-key
@@ -17,7 +73,7 @@ selection compares order bits directly; string separator selection reads the
 existing keys and retains the chosen prefix without copying its bytes.
 It has no C dependency in ordinary builds.
 
-```go
+go
 import "github.com/glycerine/go-wormhole-kv"
 
 m := wormhole.New[string, string]()
@@ -27,17 +83,17 @@ if err := r.Put("user:42", "Ada"); err != nil {
     panic(err)
 }
 value, found := r.Get("user:42")
-```
+
 
 Runnable examples also cover [iteration and callbacks](example_test.go).
-Construct maps with `New`; do not copy a Map or Ref. Close each Ref when done.
-`New` and zero-valued `Options` use the lower-memory metadata configuration:
+Construct maps with New; do not copy a Map or Ref. Close each Ref when done.
+New and zero-valued Options use the lower-memory metadata configuration:
 the two-byte metadata lookup cache is off and initial hash tables are smaller.
 To enable that cache and the larger initial reservation, use
-`NewWithOptions[K, V](Options{MetaCache: true})`. The separate numeric leaf-route
+NewWithOptions[K, V](Options{MetaCache: true}). The separate numeric leaf-route
 cache remains enabled in both modes, and hash tables still grow automatically.
 Choose the option at construction; it cannot be changed on a live map.
-`Map[K cmp.Ordered, V any]` stores native keys and values, including named
+Map[K cmp.Ordered, V any] stores native keys and values, including named
 ordered key types and values containing slices, maps or pointers. Keys follow
 natural numeric order or bytewise string order. NaNs sort after positive
 infinity; all NaN payloads identify one key. Positive and negative zero also
@@ -51,26 +107,26 @@ encoded copies. Existing-key writes do not allocate replacement records.
 
 | Operation                        | Go API                                 |
 | -------------------------------- | -------------------------------------- |
-| Point reads/writes               | `Ref.Get`, `Probe`, `Put`, `Delete`    |
-| Atomic callback under write lock | `Ref.Merge`, `Update`                  |
-| Callback under read lock         | `Ref.Inspect`                          |
-| Range deletion                   | `Ref.DeleteRange(start, end)` for [start,end), `DeleteFrom(start)` without an upper bound |
-| Ordered iteration                | `Ref.Iterator`, then `Seek`, `Valid`, `Peek`, `Next`, `Skip`, `Inspect`, `Park`, `Close` |
-| Ordered callback scan            | `Ref.Scan(start, limit, visit)` returns the number visited; a false callback stops the scan |
-| Repeated prepared-key operations | `PrepareKey`, `Ref.PutKey`, `ProbeKey` |
-| Number of keys                   | `Map.Len`                              |
+| Point reads/writes               | Ref.Get, Probe, Put, Delete    |
+| Atomic callback under write lock | Ref.Merge, Update                  |
+| Callback under read lock         | Ref.Inspect                          |
+| Range deletion                   | Ref.DeleteRange(start, end) for [start,end), DeleteFrom(start) without an upper bound |
+| Ordered iteration                | Ref.Iterator, then Seek, Valid, Peek, Next, Skip, Inspect, Park, Close |
+| Ordered callback scan            | Ref.Scan(start, limit, visit) returns the number visited; a false callback stops the scan |
+| Repeated prepared-key operations | PrepareKey, Ref.PutKey, ProbeKey |
+| Number of keys                   | Map.Len                              |
 
 Size-changing writes update per-Ref insertion/deletion tallies rather than a
-shared global counter. `Len` takes a consistent snapshot across open references;
+shared global counter. Len takes a consistent snapshot across open references;
 it costs O(open Refs), locks the reference registry, and can retry during writes.
 Closing a Ref preserves its contribution. See [the counter measurements](bench/COUNTER.md)
-for the write-throughput benefit and the increased cost of `Len`.
+for the write-throughput benefit and the increased cost of Len.
 
 Each Ref is used by one goroutine at a time. An iterator reserves its Ref until
 closed, including while parked. It holds a leaf read lock while positioned,
 so writers to that leaf wait until it moves, parks, or closes. Iteration uses
 left-to-right lock coupling and is not a whole-map snapshot. Range deletion
-also releases locks between leaves; it is not an atomic transaction. `Scan`
+also releases locks between leaves; it is not an atomic transaction. Scan
 uses the same lock coupling, visiting records within each leaf in one loop;
 locks and the Ref are released even if its callback panics. Point callback
 methods invoke the callback exactly once, including on misses. Callbacks must
@@ -85,51 +141,51 @@ and validate its version. This preserves native's metadata/leaf coordination
 while using Go atomics and locks. Go GC keeps records and routed
 leaves alive; it does not replace the table-reuse grace period.
 
-The public API follows native's automatically parked `whsafe` operations.
+The public API follows native's automatically parked whsafe operations.
 Native raw-memory views, allocator hooks, manual epoch controls, destruction,
 and separate unsynchronized entry points are represented by native Go values,
 automatic epoch handling, GC, and the synchronized API rather than C ABI
-wrappers. To remove all records use `DeleteFrom("")`; to release a map close its
+wrappers. To remove all records use DeleteFrom(""); to release a map close its
 Refs and discard it. As in native metadata, split anchors have a 65,535-byte
-length limit; a split that cannot satisfy it returns `ErrAnchorTooLong` without
+length limit; a split that cannot satisfy it returns ErrAnchorTooLong without
 inserting the new key. Long keys that do not require such an anchor are allowed.
 
 Run from this directory:
 
-```sh
+sh
 go test ./...
 go test -tags=native ./...       # requires a C compiler and parent native sources
 go test -race -tags=native ./...
 go vet -tags=native ./...
-```
+
 
 BDD-style tests build from leaf placement and prefix metadata through complete
 map operations, iterator/range behavior, and concurrency. Randomized model tests
-and fuzz targets check arbitrary keys and operation histories. The `native`
+and fuzz targets check arbitrary keys and operation histories. The native
 build tag compares slots, tags, sorted indices, split/merge anchors, metadata,
 callbacks, and workload generation against the parent C sources. Controlled
 concurrency tests cover publication, table reuse, stale routes, lock ordering,
 and small histories checked for linearizability. Native oracle fixtures live
-in `test_vectors/`; Go's `testdata/` name is reserved for fuzz-generated data.
+in test_vectors/; Go's testdata/ name is reserved for fuzz-generated data.
 
 [Write benchmarks](bench/README.md) compare identical traces with
-`github.com/tidwall/btree`, including raw latency quantiles. They run in a
+github.com/tidwall/btree, including raw latency quantiles. They run in a
 separate module. Linux benchmark workers pin their OS threads to individual
-CPUs and verify affinity; select physical cores with `taskset`.
+CPUs and verify affinity; select physical cores with taskset.
 
-To reproduce the native million-key workload, build native `concbench.out` from
+To reproduce the native million-key workload, build native concbench.out from
 the parent directory and build the Go driver here, then run sequentially:
 
-```sh
+sh
 go build -o /tmp/wormhole-concbench ./cmd/concbench
 taskset -c 0-3 ../concbench.out ../words.txt 1000000 4
 taskset -c 0-3 /tmp/wormhole-concbench ../words.txt 1000000 4
-```
+
 
 Both use four load workers, native six-word corpus generation and Lehmer RNG,
 10,000-probe batches, and three three-second rounds. The dictionary is an
 external input, not required for tests. The Go driver prints a corpus hash,
-CPU mapping, counts, and misses; `-cpuprofile` profiles probes. Ordinary GC stays
+CPU mapping, counts, and misses; -cpuprofile profiles probes. Ordinary GC stays
 enabled. 
 
 # benchmarks
@@ -169,9 +225,9 @@ With the metadata caches in use:
 
 | Operation (showing ns/key)    | Wormhole | Turtle | BP-Tree | tidwall/btree | red-blk tree | insdict | builtin map |
 | ----------------------------- | -------: | -----: | ------: | ------------: | -----------: | ------: | ----------: |
-| Tree `Get`, hit               |     48.8 |  114.2 |    91.6 |         108.8 |        194.3 |    20.2 |        15.6 |
-| Tree `Get`, miss              |     37.8 |  113.6 |    89.8 |         108.9 |        212.2 |    17.7 |        14.4 |
-| Tree `Put`, fresh key         |    116.7 |  118.9 |   106.8 |         151.9 |        356.2 |    58.4 |        74.9 |
+| Tree Get, hit               |     48.8 |  114.2 |    91.6 |         108.8 |        194.3 |    20.2 |        15.6 |
+| Tree Get, miss              |     37.8 |  113.6 |    89.8 |         108.9 |        212.2 |    17.7 |        14.4 |
+| Tree Put, fresh key         |    116.7 |  118.9 |   106.8 |         151.9 |        356.2 |    58.4 |        74.9 |
 | Ordered scan, maximum 100,000 |     2.42 |   2.72 |    2.66 |          4.52 |        15.26 |    5.33 |         N/A |
 | Full traversal (map too)      |     2.40 |   2.68 |    3.82 |          2.33 |        14.96 |    0.61 |        9.17 |
 
@@ -179,9 +235,9 @@ versus MetaCache off, Wormhole Get (hit) can be a litte slower.
 
 | Operation (showing ns/key)    | Wormhole | Turtle | BP-Tree | tidwall/btree | red-blk tree | insdict | builtin map |
 | ----------------------------- | -------: | -----: | ------: | ------------: | -----------: | ------: | ----------: |
-| Tree `Get`, hit               |     49.7 |  113.1 |    92.3 |         109.0 |        191.6 |    20.2 |        15.6 |
-| Tree `Get`, miss              |     38.3 |  113.9 |    90.4 |         109.2 |        214.6 |    17.7 |        14.4 |
-| Tree `Put`, fresh key         |    119.2 |  119.4 |   107.0 |         150.9 |        402.6 |    55.2 |        74.5 |
+| Tree Get, hit               |     49.7 |  113.1 |    92.3 |         109.0 |        191.6 |    20.2 |        15.6 |
+| Tree Get, miss              |     38.3 |  113.9 |    90.4 |         109.2 |        214.6 |    17.7 |        14.4 |
+| Tree Put, fresh key         |    119.2 |  119.4 |   107.0 |         150.9 |        402.6 |    55.2 |        74.5 |
 | Ordered scan, maximum 100,000 |     2.45 |   2.69 |    2.66 |          4.52 |        15.28 |    5.33 |         N/A |
 | Full traversal (map too)      |     2.43 |   2.71 |    3.82 |          2.34 |        14.88 |    0.61 |        9.19 |
 
@@ -202,10 +258,3 @@ License: MIT (see LICENSE file)
 Derived under MIT license from the upstream C code https://github.com/wuxb45/wormhole , which is
 Copyright (c) 2016-2026 by Xingbo Wu
 
-On Darwin/ARM64 (Apple Silicon), the library uses its ARM64 release-store
-assembly and portable implementations of the remaining architecture-specific
-helpers. `concbench` defaults to unpinned workers on this platform because
-macOS does not provide CPU affinity there. Use `-pin=false` to request unpinned
-runs explicitly on any platform; the command reports when affinity is disabled.
-`-pin=true` requires supported OS affinity (Linux or Darwin/AMD64 with cgo).
-Benchmarks that require CPU pinning still report an error when it is unavailable.

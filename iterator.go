@@ -1,6 +1,3 @@
-// Ported from wh.c, Copyright (c) 2016--2021 Wu, Xingbo <wuxb45@gmail.com>.
-// See LICENSE in the repository root. No warranty, explicit or implicit.
-
 package wormhole
 
 import "cmp"
