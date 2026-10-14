@@ -11,6 +11,12 @@
 // identify one key, as do positive and negative zero. String keys use Go's
 // bytewise order and may contain arbitrary bytes, including the empty string.
 //
+// While holding a positioned iterator, do not synchronously acquire leaf locks
+// on the same Map through another Ref or iterator, even for reads: a pending
+// writer can make them deadlock. Park or close the iterator first, including
+// before waiting for work that may need those locks. Park keeps its Ref reserved;
+// use another Ref for intervening operations, or Close to reuse its own Ref.
+//
 // Values are copied under leaf locks; callers synchronize mutations of objects
 // reachable through stored values. String bytes must remain immutable.
 // Returned strings remain valid after updates, deletion, and iterator movement.

@@ -3,7 +3,7 @@
 Audited commit: `6c103e489e2178282d6f8737a1a23107b524b3a6`.
 Audit date: 2026-10-14.
 
-This was an audit only. No implementation or repository test files were changed.
+The original audit was read-only apart from this report; it changed no implementation or repository test files. Line references below refer to the audited commit. The authorized documentation and test follow-up is recorded at the end of this report.
 
 ## Result
 
@@ -179,4 +179,12 @@ PASS: TestAuditIteratorCrossRefReadAfterPark
 
 The existing suites include epoch grace-period tests, the production snapshot-handshake double-buffer test, stale split/merge routes, access during an outstanding grace period, concurrent point histories with structural churn, concurrent iterators/range deletion/scans, callback panic handling, and Ref-count snapshot/retirement tests. The temporary overlay supplied only the targeted iterator reproducer and its Park control; it did not replace production code.
 
-Recommended follow-up: address A1's API contract and regression coverage. Preserve the publication/epoch/leaf ordering described above; this audit supplies no evidence that replacing that protocol is necessary.
+## Follow-up: A1 documentation and regression coverage
+
+The iterator restriction is now documented on `Iterator`, `Ref`, the package overview, and in the README concurrency contract. It covers cross-Ref reads, pending writers, waiting for other work that may need the locks, and the distinction between parking an iterator and closing it to release its Ref.
+
+The original temporary reproducer and Park control are now maintained in [iterator_deadlock_test.go](iterator_deadlock_test.go) as `TestIteratorCrossRefReadDeadlock` and `TestIteratorCrossRefReadAfterPark`. The reproducer runs in a bounded child process and requires both the setup marker and blocked reader/writer stack frames; a race report is a failure. The Park test verifies that both operations finish and the iterator can subsequently Seek again.
+
+Follow-up validation: `go test -count=1 ./...` and `go test -race -count=1 ./...` both passed for all four main-module packages, including the new tests, using the same redirected build cache.
+
+This follow-up addresses the contract/documentation finding without changing locking behavior. Cross-Ref lock acquisition while positioned remains unsupported. Preserve the publication/epoch/leaf ordering described above; this audit supplies no evidence that replacing that protocol is necessary.

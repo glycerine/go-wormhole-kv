@@ -81,6 +81,12 @@ func (m *Map[K, V]) Len() int64 { return m.epochs.length() }
 // do not copy it, and Close it when finished. Operations automatically
 // mark the Ref inactive after routing,
 // so an idle Ref does not delay reuse of old metadata tables.
+//
+// An Iterator reserves its Ref until closed, even while parked. While holding a
+// positioned iterator, do not synchronously acquire leaf locks on the same Map
+// through another Ref or iterator, including for reads. A pending writer can
+// make those reads deadlock. Park or close the iterator before such operations
+// or before waiting for work that may need its locks; see Iterator for details.
 type Ref[K cmp.Ordered, V any] struct {
 	m                *Map[K, V]
 	epoch            *epochRef

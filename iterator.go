@@ -10,6 +10,15 @@ import "cmp"
 // Iteration is not a snapshot of the whole Map: later leaves may reflect
 // concurrent updates. Returned values remain valid after advancing. Use an
 // Iterator from one goroutine at a time and Close it when finished.
+//
+// While positioned, do not synchronously use another Ref or iterator to acquire
+// leaf locks on the same Map. Even Get and Probe can deadlock: a pending writer
+// blocks new readers while waiting for this iterator to release its read lock.
+// Park or close the iterator first, and release it before waiting for work that
+// may need those locks. The iterator's own methods remain usable as documented.
+// Park invalidates the position but keeps the Ref reserved; use another Ref for
+// the intervening operation and Seek to position this iterator again, or Close
+// the iterator before reusing its own Ref.
 type Iterator[K cmp.Ordered, V any] struct {
 	ref   *Ref[K, V]
 	leaf  *leaf[K, V]
@@ -19,6 +28,7 @@ type Iterator[K cmp.Ordered, V any] struct {
 // Iterator creates an unpositioned iterator and reserves this Ref until the
 // iterator is closed. Use Seek to position it. Other Ref operations, including
 // creating a second iterator, panic while this iterator exists, even if parked.
+// See Iterator for the restrictions on using other Refs while positioned.
 func (r *Ref[K, V]) Iterator() *Iterator[K, V] {
 	r.checkAvailable()
 	it := &Iterator[K, V]{ref: r}

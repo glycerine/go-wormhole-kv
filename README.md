@@ -104,7 +104,7 @@ to the map. The user must call Close() on it when done with the Ref.
 |--------------|----------------------|
 | Map          | Shared across goroutines. Concurrent Ref() creation and Len() calls are supported. Do not copy the map. |
 | Ref          | One goroutine at a time. Do not copy it. Call Close() when finished; closing must not overlap its operations. |
-| Iterator     | One goroutine at a time. Reserves its Ref until closed, even while parked. |
+| Iterator     | One goroutine at a time. Reserves its Ref until closed, even while parked. While positioned, do not synchronously acquire leaf locks through another Ref or iterator on the same map, even for reads. |
 | Prepared Key | May be shared across goroutines. |
 
 These contracts are documented in [map.go](map.go:83).
@@ -128,6 +128,7 @@ These callbacks execute under the relevant leaf lock. They must not re-enter ope
 Important limits:
 
 - Scans and iterators are not whole-map snapshots. Later leaves may reflect later concurrent updates. A positioned iterator holds a leaf read lock and can delay writers until it advances, parks, or closes.
+- While holding a positioned iterator, park or close it before synchronously acquiring leaf locks through another Ref or iterator on the same map, or waiting for work that may need those locks. Even `Get` and `Probe` can deadlock: a pending writer blocks new readers while waiting for the iterator's read lock to be released. The same-Ref panic checks do not detect this cross-Ref dependency.
 - Range deletion is not a multi-key transaction. Concurrent operations can interleave as it progresses.
 
 
@@ -205,6 +206,15 @@ locks and the Ref are released even if its callback panics. Point callback
 methods invoke the callback exactly once, including on misses. Callbacks must
 not acquire leaf locks on the same Map; method documentation describes their
 individual return-value and panic behavior.
+
+The iterator restriction also applies between ordinary iterator calls: do not
+synchronously use another Ref or iterator to acquire leaf locks on the same map
+while positioned, even for reads, or wait for work that may need those locks.
+Park or close the iterator first. `Park` invalidates its position and keeps its
+Ref reserved, so use another Ref for the intervening operation and `Seek` to
+position the existing iterator again. Close the iterator to reuse its own Ref.
+The iterator's own methods, including `Peek`, `Valid`, and movement, remain
+usable as documented.
 
 Structural writers update the inactive prefix table, publish a new immutable
 version descriptor, release leaf locks, wait for earlier metadata readers, then
