@@ -60,7 +60,7 @@ This is Apple silicon ARM64 numbers; AMD64 are similarly ratio-ed.
 
 In these micro benchmarks: 
 
-compared to the fast in memory B-tree tidwall/btree, Wormhole is 2x as fast at Puts (writing keys; 96.8 / 48.4 == 2.0),
+compared to the fast in memory B-tree tidwall/btree, Wormhole is 2x faster at Puts (writing keys; 96.8 / 48.4 == 2.0),
 and 3.1x faster at Gets (reading keys; 56.6/18.1 == 3.1).
 
 Although the Turtle design matches Wormhole for writes, its reads are still 3x slower. The BP-Tree does not
