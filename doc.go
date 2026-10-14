@@ -1,7 +1,8 @@
 // Package wormhole implements a concurrent, ordered in-memory map with ordered
 // generic keys and arbitrary values, using the Wormhole paper's hash-indexed prefix trie, linked leaves,
 // stable record slots with tag-bucket chains, lazy leaf sorting, and versioned two-table metadata updates.
-// It is ported from the C implementation in the parent directory.
+// It was ported from the C implementation https://github.com/wuxb45/wormhole, and
+// then optimized further.
 //
 // Construct a Map with New. Each concurrent caller needs its own Ref, which
 // must be closed after use. Point operations automatically leave their metadata
