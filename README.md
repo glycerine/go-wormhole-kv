@@ -47,11 +47,11 @@ probe x20 58.94 mops count=177010000 misses=0
 
 The table below is for Wormhole in Go. The first two get lines
 reflect randomized searching. The last shows unsorted sequential
-scan so that the hash tables can really strut. All numbers are the average nanoseconds per key.
+scan so that the hash tables can really strut (last two columns). All numbers are the average nanoseconds per key.
 This is Apple silicon ARM64 numbers; AMD64 are similarly ratio-ed.
 
-| Operation (report ns/key)     | Wormhole | Turtle | BP-Tree | tidwall/btree | red-blk tree | insdict | builtin map |
-| ----------------------------- | -------: | -----: | ------: | ------------: | -----------: | ------: | ----------: |
+| Operation (report ns/key)     | Wormhole[1] | Turtle[2] | BP-Tree[3] | tidwall/btree[4] | red-black tree[5] | insdict[6] | builtin map |
+| ----------------------------- | ----------: | --------: | ---------: | ---------------: | --------------: | ---------: | ----------: |
 | Tree `Get`, hit               |     18.0 |   57.6 |    51.3 |          56.9 |        102.0 |     5.6 |         4.0 |
 | Tree `Get`, miss              |     18.1 |   61.9 |    61.7 |          56.6 |        129.2 |     5.5 |         4.4 |
 | Tree `Put`, fresh key         |     48.4 |   46.1 |    66.4 |          96.8 |        185.8 |    18.8 |        34.4 |
@@ -69,6 +69,13 @@ come close to Wormhole on either readers or writes, and is restricted to a singl
 Full table scan performance is dominated by the insdict, where pre-fetching sequential array elements makes it
 15x faster than the built-in Go map. Wormhole and friends are 3x faster than the built in map,
 and all support ordered scans and range queries.
+
+[1] Wormhole is this repo; https://github.com/glycerine/go-wormhole-kv
+[2] Turtle is an unpublished (and much faster) port of: https://github.com/mathworks/turtle_kv
+[3] BP-tree: https://github.com/glycerine/bufftree
+[4] tidwall/btree is: https://github.com/tidwall/btree
+[5] the red-black tree used was: https://github.com/glycerine/rbtree
+[6] insdict.Dict is: https://github.com/glycerine/insdict
 
 # concurreny design
 
