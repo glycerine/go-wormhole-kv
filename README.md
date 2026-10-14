@@ -82,6 +82,19 @@ and all support ordered scans and range queries.
 
 [6] insdict.Dict is: https://github.com/glycerine/insdict
 
+# memory use
+
+| Container         | Heap bytes | MiB  | B/key | extra GC pointer tracing load (bytes) |
+| ----------------- | ---------: | ---: | ----: | ------------------------------------: |
+| glycerine/rbtree  |    6400080 | 6.10 | 64.00 |                               4000056 |
+| insdict.Dict      |    5562488 | 5.30 | 55.62 |                                   112 |
+| Turtle            |    5015336 | 4.78 | 50.15 |                                  1720 |
+| Wormhole          |    3718624 | 3.55 | 37.19 |                                342640 |
+| bufftree.BPTree   |    2560376 | 2.44 | 25.60 |                                 40256 |
+| tidwall/btree.Map |    2513408 | 2.40 | 25.13 |                                141872 |
+| builtin Go map    |    2364608 | 2.26 | 23.65 |                                  4248 |
+
+
 # concurreny design
 
 Reading and writing goroutines share a wormhole Map, but each uses its own Ref (handle)
