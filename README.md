@@ -56,7 +56,7 @@ Apple silicon ARM64 numbers are shown; AMD64 numbers have similar ratios.
 | Get miss                   |     18.1 |   61.9 |    61.7 |          56.6 |        129.2 |     5.5 |         4.4 |
 | Put fresh                  |     48.4 |   46.1 |    66.4 |          96.8 |        185.8 |    18.8 |        34.4 |
 | Ordered scan               |     1.28 |   1.28 |    1.35 |          1.79 |         9.93 |    1.97 |         N/A |
-| Unordered scan             |         1.32 |   1.28 |    1.94 |          1.03 |         9.83 |    0.31 |        4.68 |
+| Unordered scan             |     1.32 |   1.28 |    1.94 |          1.03 |         9.83 |    0.31 |        4.68 |
 
 In these micro benchmarks: 
 
@@ -68,7 +68,7 @@ come close to Wormhole on either readers or writes, and is restricted to a singl
 
 Full table scan performance is dominated by the insdict, where pre-fetching sequential array elements makes it
 15x faster than the built-in Go map (4.68/0.31 = 15.1). Wormhole and friends are 3x faster than the built in map,
-and all support ordered scans and range queries.
+and they support ordered scans and range queries (which hash tables cannot without an extra full O(n log n) sort pass).
 
 [1] Wormhole is this repo; https://github.com/glycerine/go-wormhole-kv
 
@@ -82,17 +82,17 @@ and all support ordered scans and range queries.
 
 [6] insdict.Dict is: https://github.com/glycerine/insdict
 
-# memory use
+# memory use - wormhole uses only 1.48x more memory (meta-data cache off)
 
-| Container         | Heap bytes | MiB  | B/key | extra GC pointer tracing load (bytes) |
-| ----------------- | ---------: | ---: | ----: | ------------------------------------: |
-| glycerine/rbtree  |    6400080 | 6.10 | 64.00 |                               4000056 |
-| insdict.Dict      |    5562488 | 5.30 | 55.62 |                                   112 |
-| Turtle            |    5015336 | 4.78 | 50.15 |                                  1720 |
-| Wormhole          |    3718624 | 3.55 | 37.19 |                                342640 |
-| bufftree.BPTree   |    2560376 | 2.44 | 25.60 |                                 40256 |
-| tidwall/btree.Map |    2513408 | 2.40 | 25.13 |                                141872 |
-| builtin Go map    |    2364608 | 2.26 | 23.65 |                                  4248 |
+| Container         | Heap MB  | B/key | extra GC pointer tracing load (bytes) |
+| ----------------- | -------: | ----: | ------------------------------------: |
+| glycerine/rbtree  |     6.10 | 64.00 |                               4000056 |
+| insdict.Dict      |     5.30 | 55.62 |                                   112 |
+| Turtle            |     4.78 | 50.15 |                                  1720 |
+| Wormhole          |     3.55 | 37.19 |                                342640 |
+| bufftree.BPTree   |     2.44 | 25.60 |                                 40256 |
+| tidwall/btree.Map |     2.40 | 25.13 |                                141872 |
+| builtin Go map    |     2.26 | 23.65 |                                  4248 |
 
 
 # concurrency design
@@ -145,9 +145,7 @@ leaves for complete two-byte prefixes under the same metadata epochs;
 prefixes containing a longer separator fall back to the trie. Numeric separator
 selection compares order bits directly; string separator selection reads the
 existing keys and retains the chosen prefix without copying its bytes.
-It has no C dependency in ordinary builds.
 
-go
 ~~~
 import "github.com/glycerine/go-wormhole-kv"
 
@@ -271,7 +269,7 @@ By default we have turned off the Meta data cache of the original design.
 This saves about 38% of memory use.
 
 The Options.MetaCahce = true can restore it. The difference in Get hit performance varies; 
-we observe between 2-30% depending on the data set.
+we observe between a few percent faster depending on the data set.
 
 ~~~
 $ make memory  # Wormhole meta cache on vs off; versus
