@@ -58,11 +58,13 @@ func TestReadmeBenchmarkTable(t *testing.T) {
 		t.Fatal(err)
 	}
 	n := benchLoadSize()
-	if runtime.GOOS == "linux" {
-		cpu, err := comparisonCPU()
-		if err != nil {
+	cpu, err := comparisonCPU()
+	if err != nil {
+		if runtime.GOOS == "linux" || *comparisonBenchCPU != -1 {
 			t.Fatal(err)
 		}
+		t.Logf("running without CPU affinity: %v; GOMAXPROCS=%d", err, runtime.GOMAXPROCS(0))
+	} else if runtime.GOOS == "linux" {
 		t.Logf("benchmark CPU (verified by each case): %d; GOMAXPROCS=%d", cpu, runtime.GOMAXPROCS(0))
 	}
 	cases := make(map[string]func(*testing.B))

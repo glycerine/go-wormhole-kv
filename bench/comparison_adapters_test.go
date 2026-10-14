@@ -3,11 +3,12 @@ package bench
 import (
 	"flag"
 	"fmt"
+	"runtime"
 	"testing"
 
-	turtle "github.com/glycerine/turtle/go"
 	wormhole "github.com/glycerine/go-wormhole-kv"
 	"github.com/glycerine/go-wormhole-kv/internal/cpuaffinity"
+	turtle "github.com/glycerine/turtle/go"
 )
 
 // All seven containers receive the same already-encoded strings. Neither these
@@ -53,7 +54,7 @@ func closeComparison(idx any) {
 
 var wormholeMetaCache = flag.Bool("wormhole-meta-cache", false, "enable Wormhole two-byte metadata caching and larger initial table reservation")
 
-var comparisonBenchCPU = flag.Int("bench-cpu", -1, "CPU for comparison benchmarks (-1 selects the first allowed CPU)")
+var comparisonBenchCPU = flag.Int("bench-cpu", -1, "CPU for comparison benchmarks (-1 selects the first allowed CPU, or runs without affinity where unavailable)")
 
 func comparisonCPU() (int, error) {
 	cpus, err := cpuaffinity.CPUs()
@@ -79,6 +80,13 @@ func pinComparisonCases(cases []comparisonBenchmark) []comparisonBenchmark {
 		cases[i].run = func(b *testing.B) {
 			cpu, err := comparisonCPU()
 			if err != nil {
+				// Unsupported platforms can still benchmark with the default
+				// scheduler. Linux affinity failures and explicit CPU requests
+				// must remain errors.
+				if runtime.GOOS != "linux" && *comparisonBenchCPU == -1 {
+					run(b)
+					return
+				}
 				b.Fatal(err)
 			}
 			restore, err := cpuaffinity.Pin(cpu)
