@@ -19,8 +19,6 @@ Serializable transactions are not an aim; unabashed maximizing of single key
 write and read performance is the name of the game her. And, oh boy, does Wormhole
 deliver. 
 
-
-
 Our Go port turns this up to 11, and even surpasses the performance
 of the original C.
 
@@ -36,7 +34,7 @@ probe x20 51.98 mops
 
 Go Wormhole, reading with 20 goroutines, gets 13% more throughput, 
 approaching 60 million reads per second on the [words.txt corpus of 479K English words](https://github.com/dwyl/english-words).
-These words range from one to 45 characters, with a median of 9 and a mean of 9.4 characters.
+These words have a median of 9 characters.
 
 ~~~
 concbench words.txt 1000000 20
@@ -47,6 +45,23 @@ probe x20 59.02 mops count=177190000 misses=0
 probe x20 58.94 mops count=177010000 misses=0
 ~~~
 
+The table below is for Wormhole in Go. The first two get lines
+reflect randomized searching. The last shows unsorted sequential
+scan so that the hash tables can really strut. All numbers are the average nanoseconds per key.
+This is Apple silicon ARM64 numbers; AMD64 are similarly ratio-ed.
+
+| Operation (report ns/key)     | Wormhole | Turtle | BP-Tree | tidwall/btree | red-blk tree | insdict | builtin map |
+| ----------------------------- | -------: | -----: | ------: | ------------: | -----------: | ------: | ----------: |
+| Tree `Get`, hit               |     18.0 |   57.6 |    51.3 |          56.9 |        102.0 |     5.6 |         4.0 |
+| Tree `Get`, miss              |     18.1 |   61.9 |    61.7 |          56.6 |        129.2 |     5.5 |         4.4 |
+| Tree `Put`, fresh key         |     48.4 |   46.1 |    66.4 |          96.8 |        185.8 |    18.8 |        34.4 |
+| Ordered scan                  |     1.28 |   1.28 |    1.35 |          1.79 |         9.93 |    1.97 |         N/A |
+| Full traversal (unordered ok) |     1.32 |   1.28 |    1.94 |          1.03 |         9.83 |    0.31 |        4.68 |
+
+Compared to the fast in memory B-tree tidwall/btree, Wormhole is 2x as fast at Puts (writing keys; 96.8 / 48.4 == 2.0),
+and 3.1x faster at Gets (reading keys; 56.6/18.1 == 3.1).
+
+# concurreny design
 
 Reading and writing goroutines share a wormhole Map, but each uses its own Ref (handle)
 to the map. The user must call Close() on it when done with the Ref.
@@ -60,7 +75,7 @@ to the map. The user must call Close() on it when done with the Ref.
 
 These contracts are documented in [map.go](/Users/jaten/go/src/github.com/glycerine/go-wormhole-kv/map.go:83).
 
-The RCU-like design is still present, alongside locking. It has two distinct jobs:
+RCU is used to:
 
 1. Protect routing metadata with epochs and grace periods. Structural writers update the inactive prefix table and atomically publish a new version. Before reusing the old table, they wait for readers using that version to finish. Readers automatically announce and leave their metadata epochs; developers don’t manually manage them. Go GC handles object lifetime, but cannot replace this grace period because the metadata tables are reused. See [epoch.go](epoch.go:24).
 
