@@ -23,7 +23,7 @@ type metaSnapshot[K cmp.Ordered, V any] struct {
 }
 
 // Map is a concurrent ordered key/value store. Construct it with New and use
-// a separate Ref for each concurrent caller. Keys use their natural order, with NaNs last. Values may have any type. A Map must not be copied.
+// one Ref per goroutine. Keys use their natural order, with NaNs last. Values may have any type. A Map must not be copied.
 type Map[K cmp.Ordered, V any] struct {
 	metalock sync.Mutex
 	current  atomic.Pointer[metaSnapshot[K, V]]
@@ -77,16 +77,16 @@ func NewWithOptions[K cmp.Ordered, V any](options Options) *Map[K, V] {
 // is proportional to the number of open Refs and it can retry during writes.
 func (m *Map[K, V]) Len() int64 { return m.epochs.length() }
 
-// Ref owns a reader epoch registration. Use it from one goroutine at a time,
-// do not copy it, and Close it when finished. Operations automatically
+// Ref owns a reader epoch registration. Use one Ref per goroutine per Map,
+// and use each Ref from one goroutine at a time. Do not copy it, and Close it
+// when finished. Operations automatically
 // mark the Ref inactive after routing,
 // so an idle Ref does not delay reuse of old metadata tables.
 //
-// An Iterator reserves its Ref until closed, even while parked. While holding a
-// positioned iterator, do not synchronously acquire leaf locks on the same Map
-// through another Ref or iterator, including for reads. A pending writer can
-// make those reads deadlock. Park or close the iterator before such operations
-// or before waiting for work that may need its locks; see Iterator for details.
+// An Iterator reserves its Ref until closed, even while parked. Close the
+// iterator before resuming point operations on that Ref. Do not use a second
+// Ref to bypass iterator reservation or callback restrictions. Other goroutines
+// can use their own Refs concurrently; the map's locks coordinate access.
 type Ref[K cmp.Ordered, V any] struct {
 	m                *Map[K, V]
 	epoch            *epochRef

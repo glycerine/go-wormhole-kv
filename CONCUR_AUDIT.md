@@ -7,19 +7,19 @@ The original audit was read-only apart from this report; it changed no implement
 
 ## Result
 
-I found one reproducible **iterator deadlock hazard that needs an explicit public API restriction**. It is a contract/documentation defect, not a failure of mutual exclusion in the custom mutex. Details and fixes are below.
+**No concurrency correctness bug was confirmed within the intended API contract.** The iterator deadlock originally labeled A1 uses two Refs for the same Map from one goroutine. The maintainer clarified that the contract is one Ref per goroutine per Map, so this is unsupported reentry, not a supported-use defect. Its original P2 classification is withdrawn. The execution is retained below to explain the ownership rule.
 
 I did **not** find a concrete data race, stale-route acceptance, or premature metadata-table reuse in the inspected implementation. In particular, parking before acquiring the leaf lock, checking the leaf version under that lock, and releasing leaf locks before waiting for metadata readers are coherent with the surrounding synchronization. The post-unlock metadata updates remain protected by `metalock`.
 
 Both the ordinary and race-enabled main-module test suites passed. These results support the source review; they do not establish correctness for every execution or architecture.
 
-## Finding A1 — P2: cross-Ref operations while holding an iterator can deadlock, including reads
+## Observation A1 — unsupported cross-Ref reentry can deadlock (finding withdrawn)
 
-**Locations:** `iterator.go:5–12`, `iterator.go:19–26`, `map.go:121–128`, `leaf_mutex.go:31–41`, and `leaf_mutex.go:78–88`. The public contract in `README.md:104–130` and `README.md:198–206` has the same omission.
+**Locations at the audited commit:** `iterator.go:5–12`, `iterator.go:19–26`, `map.go:121–128`, `leaf_mutex.go:31–41`, and `leaf_mutex.go:78–88`. Ownership documentation appears in `README.md:104–130` and `README.md:198–206`.
 
-**Classification:** confirmed liveness hazard; missing iterator usage restriction. The lock behaves as designed. The API documents that an iterator holds a read lock and reserves its own Ref, but does not explain that synchronous operations through another Ref can deadlock the iterator's owner. The cross-Ref prohibition is documented for callbacks, not for ordinary code between iterator calls.
+**Classification:** reproducible deadlock from unsupported use. The original audit interpreted “one goroutine at a time per Ref” as permitting one goroutine to use multiple Refs for the same Map. That interpretation was broader than the intended one-Ref-per-goroutine-per-Map contract. The lock behaves as designed, and no iterator redesign is required to accommodate this misuse.
 
-**Trigger:** one goroutine keeps an iterator positioned and performs an operation through a second Ref on the same map. Each Ref still has only one caller; no Ref or Map is copied. Even a `Get` can hang permanently if a writer arrives first.
+**Trigger:** one goroutine keeps an iterator positioned and performs an operation through a second Ref on the same map, violating the ownership rule. This occurs between ordinary iterator calls, not inside a callback. A callback using a second Ref to reenter the same map would also violate the callback restrictions. Independent goroutines using their own Refs are supported and need not track one another's iterator positions.
 
 ### Exact execution
 
@@ -67,17 +67,17 @@ it.Close()      // Unreachable.
 
 The reproducer uses `runtime`, `sync/atomic`, and `testing`. Run it in a child test process, rather than leaving permanently blocked goroutines in the main test suite.
 
-### How to fix
+### Ownership clarification; no locking fix required
 
-The smallest fix that preserves the current iterator semantics is to make the restriction explicit in the exported `Iterator` documentation, `Ref` documentation, and README concurrency contract:
+The exported `Iterator`, `Ref`, package overview, and README now state the intended rule explicitly:
 
-> While holding a positioned iterator, do not synchronously perform other operations that acquire leaf locks on the same Map, even through another Ref or iterator. This includes reads, which can block behind a pending writer. Park or close the iterator first. Do not wait for work that may need those locks before releasing the iterator.
+> Use one Ref per goroutine per Map. Close an iterator before resuming point operations on its Ref. Do not use a second Ref in the same goroutine to bypass iterator reservation or callback restrictions. Other goroutines can use their own Refs concurrently; the map's locks coordinate access.
 
-Explain that `Park` invalidates the position and keeps the Ref reserved. Use another Ref for the intervening operation and `Seek` to position the existing iterator again, or close the iterator before reusing its own Ref. `Peek`, `Valid`, and the iterator's own movement methods remain supported as documented; the warning concerns additional lock acquisitions outside that iterator's traversal.
+`Park` invalidates the position and keeps the Ref reserved. `Seek` can position that iterator again; `Close` releases the Ref for point operations. The earlier advice to park and use another Ref in the same goroutine is withdrawn. Independent callers remain supported while an iterator is positioned, although a writer targeting its locked leaf waits for that lock to be released.
 
-Add a regression/documentation test for the pending-writer schedule and a positive test showing that parking first permits both operations to finish. Retain the current same-Ref checks, but do not describe them as protection against cross-Ref deadlocks.
+The requested reproducer is retained as an explicitly named misuse test, alongside a positive test using one Ref in each of three independent goroutines. Existing iterator-reservation and callback tests cover rejection of reentry through the same Ref.
 
-If cross-Ref reads during iteration must instead be supported, that requires an iterator design change. One option is to copy a leaf's sorted records while locked, release the lock before returning control to the caller, and resume through a fresh route strictly after the last consumed key when the copied batch is exhausted. Such a design must specify concurrent-update visibility, duplicate avoidance, value ownership, and how `Iterator.Inspect`'s lock guarantee changes. Removing writer preference alone is not a sufficient fix: it does not solve recursive writes or arbitrary multi-leaf lock cycles.
+Iteration remains nontransactional and is not a whole-map snapshot. It can see concurrent changes in later leaves as it reaches them. Holding the current leaf's read lock protects record access and traversal; it does not freeze the rest of the map. No buffering or snapshot layer was added, and the iterator's locking behavior was not changed.
 
 ## Audit of the optimistic routing and epochs
 
@@ -140,7 +140,7 @@ This also explains the writes to `right.next.prev` without the successor's leaf 
 | Architecture-specific write unlock | `leaf_release_amd64.s:3–6` uses `MOVL`; `leaf_release_arm64.s:3–6` uses `STLRW`; other targets use `atomic.StoreUint32`. The custom assembly needs its own ordering argument and is not validated merely by adding race-detector annotations. Only amd64 was exercised here. |
 | Race detector integration | `leaf_mutex_race.go` separates writer publication from aggregated reader completion and hides bookkeeping atomics. Readers acquire only writer synchronization, avoiding an artificial synchronization edge between independent readers. The intentional-reader-race subprocess test passed. |
 | Lazy sorting | `syncSortedRead` always takes `sortMu` under the leaf read lock. After that sort finishes, the index remains sorted until a writer can acquire the leaf, so other readers can inspect it after releasing `sortMu`. Point readers do not inspect the sorted index. |
-| Iterator/Scan traversal | The successor is locked before releasing the current leaf. Holding the predecessor prevents the successor from being unlinked. Traversal and merge acquisition both proceed left to right. Finding A1 concerns caller-held locks outside this internal traversal order. |
+| Iterator/Scan traversal | The successor is locked before releasing the current leaf. Holding the predecessor prevents the successor from being unlinked. Traversal and merge acquisition both proceed left to right. Observation A1 deliberately violates the Ref ownership contract. |
 | Range deletion | `unlinkRight(..., true)` intentionally retains the left lock through the grace period. Epoch readers do not wait for leaf locks while active, so that retention does not itself create an epoch/leaf cycle. It can extend the time other operations wait for that leaf. |
 | Callbacks | User callbacks run after the metadata epoch is parked. Deferred cleanup releases point/Scan locks and restores callback state on panic. Iterator.Inspect intentionally retains the positioned iterator's lock after a panic, as documented. Reentry through the same Ref is rejected; the cross-Ref callback prohibition remains a caller obligation. |
 | Numeric route caches and metadata shortcuts | Mutable cache entries belong to their respective metadata tables and use the same publication and grace-period protection. The two tables allocate separate mutable metadata/cache objects. |
@@ -151,7 +151,7 @@ The internal blocking order is leaf locks from left to right, followed by `metal
 
 ## Progress and validation limits
 
-- An iterator retained indefinitely or a callback that does not return can indefinitely delay writers. Pending writer reservation then delays subsequent readers too. Finding A1 describes the missing caller-facing consequence.
+- An iterator retained indefinitely or a callback that does not return can indefinitely delay writers. Pending writer reservation then delays subsequent readers too. Observation A1 demonstrates the consequence of bypassing ownership restrictions.
 - The mutex has bounded polling before yielding, not a bounded acquisition time or FIFO fairness guarantee. Continuous contention can delay particular callers.
 - A descheduled metadata reader can delay table retirement. While waiting, a structural writer holds `metalock` and the registry mutex. Point operations on available leaves can still proceed, but further structural changes, Ref registration/retirement, and Len can wait.
 - Len retries while holding the registry mutex. Continuous tally changes can prevent a successful snapshot and consequently delay structural retirement and Ref lifecycle operations. The retrying behavior is already documented; no wait-free progress is claimed.
@@ -179,12 +179,14 @@ PASS: TestAuditIteratorCrossRefReadAfterPark
 
 The existing suites include epoch grace-period tests, the production snapshot-handshake double-buffer test, stale split/merge routes, access during an outstanding grace period, concurrent point histories with structural churn, concurrent iterators/range deletion/scans, callback panic handling, and Ref-count snapshot/retirement tests. The temporary overlay supplied only the targeted iterator reproducer and its Park control; it did not replace production code.
 
-## Follow-up: A1 documentation and regression coverage
+## Follow-up: ownership clarification and misuse coverage
 
-The iterator restriction is now documented on `Iterator`, `Ref`, the package overview, and in the README concurrency contract. It covers cross-Ref reads, pending writers, waiting for other work that may need the locks, and the distinction between parking an iterator and closing it to release its Ref.
+The one-Ref-per-goroutine-per-Map rule is now explicit on `Iterator`, `Ref`, the package overview, and in the README concurrency contract. Documentation distinguishes parking an iterator from closing it to release its Ref, and makes clear that independent goroutines need no extra coordination around iterator positions.
 
-The original temporary reproducer and Park control are now maintained in [iterator_deadlock_test.go](iterator_deadlock_test.go) as `TestIteratorCrossRefReadDeadlock` and `TestIteratorCrossRefReadAfterPark`. The reproducer runs in a bounded child process and requires both the setup marker and blocked reader/writer stack frames; a race report is a failure. The Park test verifies that both operations finish and the iterator can subsequently Seek again.
+The original temporary reproducer and Park control are maintained in [iterator_deadlock_test.go](iterator_deadlock_test.go), now named `TestIteratorUnsupportedCrossRefReentryDeadlocks` and `TestIteratorParkAllowsConcurrentCallers`. The reproducer deliberately violates the ownership rule, runs in a bounded child process, and requires both the setup marker and blocked reader/writer stack frames; a race report is a failure. The positive test uses one Ref per goroutine, verifies that parking permits both independent callers to finish, and checks that the iterator can subsequently Seek again.
 
-Follow-up validation: `go test -count=1 ./...` and `go test -race -count=1 ./...` both passed for all four main-module packages, including the new tests, using the same redirected build cache.
+Initial follow-up validation, before reclassifying A1 and renaming the tests: `go test -count=1 ./...` and `go test -race -count=1 ./...` both passed for all four main-module packages, including the new tests, using the same redirected build cache.
 
-This follow-up addresses the contract/documentation finding without changing locking behavior. Cross-Ref lock acquisition while positioned remains unsupported. Preserve the publication/epoch/leaf ordering described above; this audit supplies no evidence that replacing that protocol is necessary.
+After the ownership clarification, the renamed misuse and concurrent-caller tests, plus `TestIteratorLifetime` and `TestIteratorInspect`, passed both normally and with `-race` using `-count=1`. Production changes in this follow-up are comments only.
+
+The proposed iterator redesign was canceled before any implementation change. The corrected audit does not identify a supported-use deadlock or justify a locking change. Preserve the publication/epoch/leaf ordering described above.

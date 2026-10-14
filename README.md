@@ -97,14 +97,14 @@ and they support ordered scans and range queries (which hash tables cannot witho
 
 # concurrency design
 
-Reading and writing goroutines share a wormhole Map, but each uses its own Ref (handle)
-to the map. The user must call Close() on it when done with the Ref.
+Reading and writing goroutines share a wormhole Map. Use one Ref (handle) per
+goroutine per Map, and call Close() when done with it.
 
 | Object       | Concurrency contract |
 |--------------|----------------------|
 | Map          | Shared across goroutines. Concurrent Ref() creation and Len() calls are supported. Do not copy the map. |
-| Ref          | One goroutine at a time. Do not copy it. Call Close() when finished; closing must not overlap its operations. |
-| Iterator     | One goroutine at a time. Reserves its Ref until closed, even while parked. While positioned, do not synchronously acquire leaf locks through another Ref or iterator on the same map, even for reads. |
+| Ref          | One Ref per goroutine per Map; each Ref has one caller at a time. Do not copy it. Call Close() when finished; closing must not overlap its operations. |
+| Iterator     | One goroutine at a time. Reserves its Ref until closed, even while parked. Close it before resuming point operations on that Ref. |
 | Prepared Key | May be shared across goroutines. |
 
 These contracts are documented in [map.go](map.go:83).
@@ -128,7 +128,7 @@ These callbacks execute under the relevant leaf lock. They must not re-enter ope
 Important limits:
 
 - Scans and iterators are not whole-map snapshots. Later leaves may reflect later concurrent updates. A positioned iterator holds a leaf read lock and can delay writers until it advances, parks, or closes.
-- While holding a positioned iterator, park or close it before synchronously acquiring leaf locks through another Ref or iterator on the same map, or waiting for work that may need those locks. Even `Get` and `Probe` can deadlock: a pending writer blocks new readers while waiting for the iterator's read lock to be released. The same-Ref panic checks do not detect this cross-Ref dependency.
+- Do not use a second Ref in the same goroutine to bypass iterator reservation or callback restrictions. Other goroutines can continue using their own Refs; the map's locks coordinate access without callers tracking each other's iterator positions.
 - Range deletion is not a multi-key transaction. Concurrent operations can interleave as it progresses.
 
 
@@ -196,7 +196,8 @@ it costs O(open Refs), locks the reference registry, and can retry during writes
 Closing a Ref preserves its contribution. See [the counter measurements](bench/COUNTER.md)
 for the write-throughput benefit and the increased cost of Len.
 
-Each Ref is used by one goroutine at a time. An iterator reserves its Ref until
+Use one Ref per goroutine per Map, with one caller at a time for each Ref.
+An iterator reserves its Ref until
 closed, including while parked. It holds a leaf read lock while positioned,
 so writers to that leaf wait until it moves, parks, or closes. Iteration uses
 left-to-right lock coupling and is not a whole-map snapshot. Range deletion
@@ -207,14 +208,13 @@ methods invoke the callback exactly once, including on misses. Callbacks must
 not acquire leaf locks on the same Map; method documentation describes their
 individual return-value and panic behavior.
 
-The iterator restriction also applies between ordinary iterator calls: do not
-synchronously use another Ref or iterator to acquire leaf locks on the same map
-while positioned, even for reads, or wait for work that may need those locks.
-Park or close the iterator first. `Park` invalidates its position and keeps its
-Ref reserved, so use another Ref for the intervening operation and `Seek` to
-position the existing iterator again. Close the iterator to reuse its own Ref.
-The iterator's own methods, including `Peek`, `Valid`, and movement, remain
-usable as documented.
+`Park` invalidates the iterator's position and keeps its Ref reserved; `Seek`
+can position it again. Close the iterator before resuming point operations on
+that Ref. Using a second Ref in the same goroutine to bypass this reservation
+is unsupported, including for reads. The iterator's own methods remain usable
+as documented. Iteration does not provide transaction semantics: later leaves
+may reflect concurrent inserts, deletes, and updates. The current leaf's read
+lock protects record access and traversal, not a snapshot of the whole map.
 
 Structural writers update the inactive prefix table, publish a new immutable
 version descriptor, release leaf locks, wait for earlier metadata readers, then
