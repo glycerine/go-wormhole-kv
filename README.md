@@ -72,7 +72,7 @@ and all support ordered scans and range queries.
 
 [1] Wormhole is this repo; https://github.com/glycerine/go-wormhole-kv
 
-[2] Turtle is an unpublished (and much faster) port of: https://github.com/mathworks/turtle_kv
+[2] Turtle K/V in Go is: https://github.com/glycerine/go-turtle-kv (See also the C https://github.com/mathworks/turtle_kv)
 
 [3] BP-tree: https://github.com/glycerine/bufftree
 
