@@ -45,10 +45,10 @@ probe x20 59.02 mops count=177190000 misses=0
 probe x20 58.94 mops count=177010000 misses=0
 ~~~
 
-The table below is for Wormhole in Go. The first two get lines
+The table below is for Wormhole in Go, on map[uint64]uint64 trees and hash tables. The first two get lines
 reflect randomized searching. The last shows unsorted sequential
-scan so that the hash tables can really strut (last two columns). All numbers are the average nanoseconds per key.
-This is Apple silicon ARM64 numbers; AMD64 are similarly ratio-ed.
+scan so the hash tables can really strut. All numbers are the average nanoseconds per key.
+Apple silicon ARM64 numbers are shown; AMD64 numbers has similar ratios.
 
 | Operation (report ns/key)  | Wormhole[1] | Turtle[2] | BP-Tree[3] | tidwall/btree[4] | red-black tree[5] | insdict[6] | builtin map |
 | -------------------------- | ----------: | --------: | ---------: | ---------------: | --------------: | ---------: | ----------: |
@@ -60,14 +60,14 @@ This is Apple silicon ARM64 numbers; AMD64 are similarly ratio-ed.
 
 In these micro benchmarks: 
 
-compared to the fast in memory B-tree tidwall/btree, Wormhole is 2x faster at Puts (writing keys; 96.8 / 48.4 == 2.0),
+Compared to the fast in memory B-tree tidwall/btree, Wormhole is 2x as fast at Puts (writing keys; 96.8 / 48.4 == 2.0),
 and 3.1x faster at Gets (reading keys; 56.6/18.1 == 3.1).
 
 Although the Turtle design matches Wormhole for writes, its reads are still 3x slower. The BP-Tree does not
 come close to Wormhole on either readers or writes, and is restricted to a single goroutine.
 
 Full table scan performance is dominated by the insdict, where pre-fetching sequential array elements makes it
-15x faster than the built-in Go map. Wormhole and friends are 3x faster than the built in map,
+15x faster than the built-in Go map (4.68/0.31 = 15.1). Wormhole and friends are 3x faster than the built in map,
 and all support ordered scans and range queries.
 
 [1] Wormhole is this repo; https://github.com/glycerine/go-wormhole-kv
