@@ -227,12 +227,12 @@ inserting the new key. Long keys that do not require such an anchor are allowed.
 
 Run from this directory:
 
-sh
+~~~
 go test ./...
 go test -tags=native ./...       # requires a C compiler and parent native sources
 go test -race -tags=native ./...
 go vet -tags=native ./...
-
+~~~
 
 BDD-style tests build from leaf placement and prefix metadata through complete
 map operations, iterator/range behavior, and concurrency. Randomized model tests
@@ -251,11 +251,11 @@ CPUs and verify affinity; select physical cores with taskset.
 To reproduce the native million-key workload, build native concbench.out from
 the parent directory and build the Go driver here, then run sequentially:
 
-sh
+~~~
 go build -o /tmp/wormhole-concbench ./cmd/concbench
 taskset -c 0-3 ../concbench.out ../words.txt 1000000 4
 taskset -c 0-3 /tmp/wormhole-concbench ../words.txt 1000000 4
-
+~~~
 
 Both use four load workers, native six-word corpus generation and Lehmer RNG,
 10,000-probe batches, and three three-second rounds. The dictionary is an
