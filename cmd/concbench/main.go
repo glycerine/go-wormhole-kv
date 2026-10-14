@@ -38,6 +38,8 @@ func run() error {
 	duration := flag.Duration("duration", 3*time.Second, "probe round duration")
 	rounds := flag.Int("rounds", 3, "number of probe rounds")
 	prefetch := flag.Bool("prefetch", true, "prefetch upcoming query bytes and samples as native does (amd64)")
+	metaCache := flag.Bool("meta", false, "use memory hungry metadata-cache for a tiny bit of read improvement")
+
 	flag.Parse()
 	if flag.NArg() != 3 {
 		return fmt.Errorf("usage: concbench [flags] words-file keys threads")
@@ -117,12 +119,15 @@ func run() error {
 	fmt.Printf("corpus keys=%d sha256=%s\n", n, fingerprint)
 	fmt.Printf("Go %s GOMAXPROCS=%d; prepared keys, automatic epoch parking\n", runtime.Version(), runtime.GOMAXPROCS(0))
 	fmt.Printf("workload prefetch=%v\n", *prefetch)
+	fmt.Printf("use metadata-cache=%v\n", *metaCache)
 	if *hotKeys > 0 {
 		fmt.Printf("diagnostic trace repeats the first %d prepared corpus keys; distinct=%d\n", *hotKeys, wantKeys)
 	}
 	// Native concbench stores zero-length values and probes only for key
 	// presence. Use a zero-size Go value so both drivers measure a key set.
-	m := wormhole.NewWithOptions[string, struct{}](wormhole.Options{MetaCache: true})
+
+	m := wormhole.NewWithOptions[string, struct{}](wormhole.Options{MetaCache: *metaCache})
+
 	if *loadWorkload == "update" {
 		r := m.Ref()
 		for _, key := range keys {
