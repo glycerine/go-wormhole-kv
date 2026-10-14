@@ -148,6 +148,7 @@ existing keys and retains the chosen prefix without copying its bytes.
 It has no C dependency in ordinary builds.
 
 go
+~~~
 import "github.com/glycerine/go-wormhole-kv"
 
 m := wormhole.New[string, string]()
@@ -157,7 +158,7 @@ if err := r.Put("user:42", "Ada"); err != nil {
     panic(err)
 }
 value, found := r.Get("user:42")
-
+~~~
 
 Runnable examples also cover [iteration and callbacks](example_test.go).
 Construct maps with New; do not copy a Map or Ref. Close each Ref when done.
