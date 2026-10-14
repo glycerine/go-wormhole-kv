@@ -4,7 +4,7 @@ Wormhole is an interesting and very fast design for
 an in-memory ordered-key/value store, [originally in C](https://github.com/wuxb45/wormhole) 
 
 The theory of operation is described in [the Eurosys 2019 paper](wormhole.pdf) by
-Xingo Wu, Fan Ni, and Song Jiang.
+Xingbo Wu, Fan Ni, and Song Jiang.
 
 # concurrency - the name of the game
 
